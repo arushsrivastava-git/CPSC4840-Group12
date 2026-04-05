@@ -1206,8 +1206,8 @@ function App() {
       {renderedBoard}
 
       {isSyncing ? (
-        <div className="async-status" aria-live="polite">
-          <span className="async-status__dot" /> Syncing with local backend…
+        <div className="loading-indicator" aria-live="polite" aria-label="Loading">
+          <span className="loading-indicator__spinner" aria-hidden="true" />
         </div>
       ) : null}
 
