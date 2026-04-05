@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { backend } from './mockBackend'
 
 const IMAGE_ICON_URL = 'https://www.figma.com/api/mcp/asset/d7b50615-b081-4bba-907f-ebb8f753008b'
 const MAP_IMAGE_URL = 'https://www.figma.com/api/mcp/asset/66c803f4-8106-456b-81d0-f22108fa7504'
@@ -30,94 +31,23 @@ const MENU_TO_BOARD = {
   'My Listings': BOARD.MY_LISTINGS,
 }
 
-const LISTINGS = [
+const CREATE_INTENTS = [
   {
-    id: 'listing-john',
-    threadId: 'thread-john',
-    title: '2 Bed, 2 Bath',
-    owner: 'John Doe',
-    address: '123 Apple St',
-    price: '$1,500 / month',
-    rentLabel: '$1500/mo',
-    distance: '0.7mi from center of campus',
-    lease: '1 year lease - Starts May 17',
-    roommates: '2 roomates',
-    description:
-      'Bright and modern flat featuring a spacious open-plan living area, well-equipped kitchen, and comfortable bedrooms. Designed for everyday convenience, it offers natural light, clean finishes, and a practical layout in a well-connected location.',
-    amenities: ['Attached Bathroom', 'In House Laundry', 'Fully Furnished'],
+    label: 'Create Listing',
+    helper: 'I have a unit and need roommates',
   },
   {
-    id: 'listing-mary',
-    threadId: 'thread-mary',
-    title: '1 Bed, 1 Bath',
-    owner: 'Mary Smith',
-    address: '472 Orange St',
-    price: '$800 / month',
-    rentLabel: '$800/mo',
-    distance: '1.4mi from center of campus',
-    lease: '1 year lease - Starts Aug 1',
-    roommates: '1 roomate',
-    description:
-      'Quiet one-bedroom unit with updated kitchen appliances, dedicated work nook, and easy bus access. Great for a single tenant looking for a simple, comfortable setup close to campus.',
-    amenities: ['Heating Included', 'Bike Storage', 'Pet Friendly'],
-  },
-  {
-    id: 'listing-alex',
-    threadId: 'thread-alex',
-    title: '3 Bed, 2 Bath',
-    owner: 'Alex Kim',
-    address: '88 Chapel St',
-    price: '$2,100 / month',
-    rentLabel: '$2100/mo',
-    distance: '0.5mi from center of campus',
-    lease: '9 month lease - Starts Sep 1',
-    roommates: '2 roomates',
-    description:
-      'Large shared apartment with generous common area and private study spaces. Suitable for groups who want to split rent and stay within walking distance of classes.',
-    amenities: ['Dishwasher', 'Central Air', 'Study Room'],
+    label: 'Find Housing',
+    helper: "I'm searching for a place to live",
   },
 ]
 
-const THREADS = [
-  {
-    id: 'thread-john',
-    user: 'John Doe',
-    subject: '2 Bed, 2 Bath Listing',
-    preview: 'Is this listing still available?',
-    unread: true,
-    time: '1m ago',
-  },
-  {
-    id: 'thread-mary',
-    user: 'Mary Smith',
-    subject: '1 Bed, 1 Bath Listing',
-    preview: 'Would July move-in work for you?',
-    unread: true,
-    time: '12m ago',
-  },
-  {
-    id: 'thread-alex',
-    user: 'Alex Kim',
-    subject: '3 Bed, 2 Bath Listing',
-    preview: 'Can I schedule an in-person tour?',
-    unread: false,
-    time: '3h ago',
-  },
-]
+function pickActiveById(items, id) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return null
+  }
 
-const INITIAL_CHAT_LOG = {
-  'thread-john': [
-    { sender: 'them', text: 'Hi Arush, is this listing still available?' },
-    { sender: 'me', text: 'Yes, it is available starting May 17.' },
-  ],
-  'thread-mary': [
-    { sender: 'them', text: 'Would July move-in work for you?' },
-    { sender: 'me', text: 'July works. Can you share utilities estimate?' },
-  ],
-  'thread-alex': [
-    { sender: 'them', text: 'Can I schedule an in-person tour?' },
-    { sender: 'me', text: 'Sure, I can do Friday after 2pm.' },
-  ],
+  return items.find((item) => item.id === id) || items[0]
 }
 
 function ProfileIcon() {
@@ -133,6 +63,21 @@ function ProfileIcon() {
 
 function ImagePlaceholder({ alt = '' }) {
   return <img className="image-placeholder" src={IMAGE_ICON_URL} alt={alt} />
+}
+
+function EmptyListingCard() {
+  return (
+    <article className="listing-card listing-card--empty" aria-hidden="true">
+      <div className="listing-card__image-shell">
+        <ImagePlaceholder />
+      </div>
+      <div className="listing-card__content">
+        <h2>No Listing</h2>
+        <p>Data unavailable</p>
+      </div>
+      <div className="listing-card__cta listing-card__cta--disabled">See More</div>
+    </article>
+  )
 }
 
 function WireframeHeader({
@@ -213,16 +158,6 @@ function ListingCard({ listing, onSeeMore }) {
   )
 }
 
-function CutResultCard() {
-  return (
-    <article className="cut-result" aria-hidden="true">
-      <div className="cut-result__image-shell">
-        <ImagePlaceholder />
-      </div>
-    </article>
-  )
-}
-
 function MapPanel({ showHelp, onHelpOpen, onHelpClose }) {
   return (
     <section className="map-panel" aria-label="Map of listings">
@@ -260,6 +195,7 @@ function MapPanel({ showHelp, onHelpOpen, onHelpClose }) {
 }
 
 function SearchLayout({
+  listings,
   showHelp,
   onHelpOpen,
   onHelpClose,
@@ -271,11 +207,7 @@ function SearchLayout({
 }) {
   return (
     <div className="board board--search">
-      <WireframeHeader
-        activeMenu={activeMenu}
-        onMenuClick={onMenuClick}
-        onProfileClick={onProfileClick}
-      />
+      <WireframeHeader activeMenu={activeMenu} onMenuClick={onMenuClick} onProfileClick={onProfileClick} />
 
       <section className="search-body">
         <h1>Find Housing</h1>
@@ -288,14 +220,19 @@ function SearchLayout({
         </div>
 
         <div className="results-layout">
-          <ListingCard listing={LISTINGS[0]} onSeeMore={() => onOpenListing(LISTINGS[0].id)} />
-          <ListingCard listing={LISTINGS[1]} onSeeMore={() => onOpenListing(LISTINGS[1].id)} />
-          <MapPanel showHelp={showHelp} onHelpOpen={onHelpOpen} onHelpClose={onHelpClose} />
-        </div>
+          <div className="results-feed">
+            {listings.length === 0 ? (
+              <EmptyListingCard />
+            ) : (
+              listings.map((listing) => (
+                <ListingCard key={listing.id} listing={listing} onSeeMore={() => onOpenListing(listing.id)} />
+              ))
+            )}
+          </div>
 
-        <div className="cut-results" aria-hidden="true">
-          <CutResultCard />
-          <CutResultCard />
+          <aside className="results-map-rail">
+            <MapPanel showHelp={showHelp} onHelpOpen={onHelpOpen} onHelpClose={onHelpClose} />
+          </aside>
         </div>
       </section>
 
@@ -459,8 +396,22 @@ function BrowseMessageBoard({
   )
 }
 
-function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick, onProfileClick }) {
+function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick }) {
   const isCreate = mode === BOARD.CREATE_ACCOUNT
+
+  const [createForm, setCreateForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    intent: CREATE_INTENTS[0].label,
+  })
+
+  const [signInForm, setSignInForm] = useState({
+    email: '',
+    password: '',
+  })
 
   return (
     <div className="board board--auth">
@@ -470,7 +421,6 @@ function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick, onProfileClick }
         profileMode="auth"
         authMode={mode}
         onAuthModeChange={onModeChange}
-        onProfileClick={onProfileClick}
       />
 
       <section className="auth-body">
@@ -498,45 +448,74 @@ function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick, onProfileClick }
 
               <label>
                 First Name
-                <input type="text" />
+                <input
+                  type="text"
+                  value={createForm.firstName}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, firstName: event.target.value }))}
+                />
               </label>
 
               <label>
                 Last Name
-                <input type="text" />
+                <input
+                  type="text"
+                  value={createForm.lastName}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, lastName: event.target.value }))}
+                />
               </label>
 
               <label>
                 University Email (must end in .edu)
-                <input type="email" />
+                <input
+                  type="email"
+                  value={createForm.email}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, email: event.target.value }))}
+                />
               </label>
 
               <small>A verification code will be sent to this address</small>
 
               <label>
                 Password
-                <input type="password" />
+                <input
+                  type="password"
+                  value={createForm.password}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))}
+                />
               </label>
 
               <label>
                 Confirm Password
-                <input type="password" />
+                <input
+                  type="password"
+                  value={createForm.confirmPassword}
+                  onChange={(event) =>
+                    setCreateForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
+                  }
+                />
               </label>
 
               <p className="auth-role-label">I am looking to...</p>
 
               <div className="auth-role-grid">
-                <button type="button" className="auth-role-card auth-role-card--active">
-                  <strong>Create Listing</strong>
-                  <span>I have a unit and need roommates</span>
-                </button>
-                <button type="button" className="auth-role-card">
-                  <strong>Find Housing</strong>
-                  <span>I'm searching for a place to live</span>
-                </button>
+                {CREATE_INTENTS.map((intent) => (
+                  <button
+                    key={intent.label}
+                    type="button"
+                    className={`auth-role-card ${createForm.intent === intent.label ? 'auth-role-card--active' : ''}`}
+                    onClick={() => setCreateForm((prev) => ({ ...prev, intent: intent.label }))}
+                  >
+                    <strong>{intent.label}</strong>
+                    <span>{intent.helper}</span>
+                  </button>
+                ))}
               </div>
 
-              <button className="auth-submit" type="button" onClick={onSubmit}>
+              <button
+                className="auth-submit"
+                type="button"
+                onClick={() => onSubmit({ mode, data: createForm })}
+              >
                 Send Verification Code →
               </button>
             </form>
@@ -546,15 +525,27 @@ function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick, onProfileClick }
 
               <label>
                 Email Address
-                <input type="email" />
+                <input
+                  type="email"
+                  value={signInForm.email}
+                  onChange={(event) => setSignInForm((prev) => ({ ...prev, email: event.target.value }))}
+                />
               </label>
 
               <label>
                 Password
-                <input type="password" />
+                <input
+                  type="password"
+                  value={signInForm.password}
+                  onChange={(event) => setSignInForm((prev) => ({ ...prev, password: event.target.value }))}
+                />
               </label>
 
-              <button className="auth-submit" type="button" onClick={onSubmit}>
+              <button
+                className="auth-submit"
+                type="button"
+                onClick={() => onSubmit({ mode, data: signInForm })}
+              >
                 Sign In →
               </button>
             </form>
@@ -565,7 +556,7 @@ function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick, onProfileClick }
   )
 }
 
-function AccountBoard({ onMenuClick, onProfileClick, onSignOut }) {
+function AccountBoard({ profile, onMenuClick, onProfileClick, onSignOut }) {
   return (
     <div className="board board--account">
       <WireframeHeader activeMenu="" onMenuClick={onMenuClick} onProfileClick={onProfileClick} />
@@ -578,10 +569,12 @@ function AccountBoard({ onMenuClick, onProfileClick, onSignOut }) {
             <div className="account-avatar">
               <ProfileIcon />
             </div>
-            <h2>Alicia Stone</h2>
-            <p>Class: 2027</p>
-            <p>Email: alicia.stone@yale.edu</p>
-            <p>Role: Looking for housing</p>
+            <h2>
+              {profile.firstName} {profile.lastName}
+            </h2>
+            <p>Class: {profile.classYear}</p>
+            <p>Email: {profile.email}</p>
+            <p>Role: {profile.role}</p>
 
             <div className="account-actions">
               <button type="button">Edit Profile</button>
@@ -593,10 +586,7 @@ function AccountBoard({ onMenuClick, onProfileClick, onSignOut }) {
 
           <article className="account-card account-card--about">
             <h2>About me</h2>
-            <p>
-              Hi there! I'm a 24-year-old graduate student looking for a 2-year housing lease. Super fun and easy to
-              connect with, clean, responsible and mostly keep to myself. Thanks!
-            </p>
+            <p>{profile.about}</p>
           </article>
         </div>
       </section>
@@ -604,16 +594,32 @@ function AccountBoard({ onMenuClick, onProfileClick, onSignOut }) {
   )
 }
 
-function ListingEditorBoard({ mode, listing, onMenuClick, onProfileClick, onSubmit }) {
+function ListingEditorBoard({ mode, listing, profile, onMenuClick, onProfileClick, onSubmit }) {
   const isEdit = mode === BOARD.EDIT_LISTING
+
+  const [form, setForm] = useState({
+    title: listing?.title || '1 Bed, 1 Bath',
+    owner: listing?.owner || `${profile.firstName} ${profile.lastName}`,
+    address: listing?.address || '',
+    price: listing?.price || '$1,200 / month',
+    lease: listing?.lease || '1 year lease - Starts Sep 1',
+    description: listing?.description || '',
+    amenities: listing?.amenities || ['Attached Bathroom', 'In House Laundry'],
+  })
+
+  const toggleAmenity = (amenity) => {
+    setForm((prev) => {
+      const exists = prev.amenities.includes(amenity)
+      return {
+        ...prev,
+        amenities: exists ? prev.amenities.filter((item) => item !== amenity) : [...prev.amenities, amenity],
+      }
+    })
+  }
 
   return (
     <div className="board board--editor">
-      <WireframeHeader
-        activeMenu="Create Listing"
-        onMenuClick={onMenuClick}
-        onProfileClick={onProfileClick}
-      />
+      <WireframeHeader activeMenu="Create Listing" onMenuClick={onMenuClick} onProfileClick={onProfileClick} />
 
       <section className="editor-body">
         <h1>{isEdit ? 'Editing Your Post' : 'Your Post'}</h1>
@@ -633,22 +639,47 @@ function ListingEditorBoard({ mode, listing, onMenuClick, onProfileClick, onSubm
 
               <label>
                 Title
-                <input type="text" defaultValue={listing.title} />
+                <input
+                  type="text"
+                  value={form.title}
+                  onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
+                />
+              </label>
+
+              <label>
+                Owner
+                <input
+                  type="text"
+                  value={form.owner}
+                  onChange={(event) => setForm((prev) => ({ ...prev, owner: event.target.value }))}
+                />
               </label>
 
               <label>
                 Address
-                <input type="text" defaultValue={listing.address} />
+                <input
+                  type="text"
+                  value={form.address}
+                  onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
+                />
               </label>
 
               <label>
                 Monthly Price
-                <input type="text" defaultValue={listing.price} />
+                <input
+                  type="text"
+                  value={form.price}
+                  onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))}
+                />
               </label>
 
               <label>
                 Lease Details
-                <input type="text" defaultValue={listing.lease} />
+                <input
+                  type="text"
+                  value={form.lease}
+                  onChange={(event) => setForm((prev) => ({ ...prev, lease: event.target.value }))}
+                />
               </label>
             </section>
           </div>
@@ -656,25 +687,30 @@ function ListingEditorBoard({ mode, listing, onMenuClick, onProfileClick, onSubm
           <div className="editor-right">
             <label className="editor-description">
               Description
-              <textarea defaultValue={listing.description} />
+              <textarea
+                value={form.description}
+                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+              />
             </label>
 
             <fieldset className="editor-amenities">
               <legend>Amenities</legend>
-              <label>
-                <input type="checkbox" defaultChecked /> Attached Bathroom
-              </label>
-              <label>
-                <input type="checkbox" defaultChecked /> In House Laundry
-              </label>
-              <label>
-                <input type="checkbox" defaultChecked={listing.id !== 'listing-mary'} /> Fully Furnished
-              </label>
+              {['Attached Bathroom', 'In House Laundry', 'Fully Furnished', 'Dishwasher'].map((amenity) => (
+                <label key={amenity}>
+                  <input
+                    type="checkbox"
+                    checked={form.amenities.includes(amenity)}
+                    onChange={() => toggleAmenity(amenity)}
+                  />
+                  {' '}
+                  {amenity}
+                </label>
+              ))}
             </fieldset>
           </div>
         </div>
 
-        <button className="editor-submit" type="button" onClick={onSubmit}>
+        <button className="editor-submit" type="button" onClick={() => onSubmit(form)}>
           {isEdit ? 'Update Post' : 'Upload Post'}
         </button>
       </section>
@@ -682,7 +718,7 @@ function ListingEditorBoard({ mode, listing, onMenuClick, onProfileClick, onSubm
   )
 }
 
-function MyListingsBoard({ onMenuClick, onProfileClick, onEditListing, onOpenListing }) {
+function MyListingsBoard({ listings, onMenuClick, onProfileClick, onEditListing, onOpenListing }) {
   return (
     <div className="board board--my-listings">
       <WireframeHeader activeMenu="My Listings" onMenuClick={onMenuClick} onProfileClick={onProfileClick} />
@@ -692,26 +728,33 @@ function MyListingsBoard({ onMenuClick, onProfileClick, onEditListing, onOpenLis
 
         <div className="my-listings-layout">
           <div className="my-listings-grid">
-            {LISTINGS.slice(0, 2).map((listing) => (
-              <article key={listing.id} className="my-listing-card">
-                <div className="my-listing-card__image">
-                  <ImagePlaceholder alt="Listing" />
-                </div>
-
-                <h2>{listing.title}</h2>
-                <p>{listing.owner}</p>
-                <p>{listing.address}</p>
-
-                <div className="my-listing-card__actions">
-                  <button type="button" onClick={() => onEditListing(listing.id)}>
-                    Edit Post
-                  </button>
-                  <button type="button" onClick={() => onOpenListing(listing.id)}>
-                    Open
-                  </button>
-                </div>
+            {listings.length === 0 ? (
+              <article className="my-listing-card my-listing-card--empty">
+                <h2>No listings yet</h2>
+                <p>Create your first listing from the Create Listing tab.</p>
               </article>
-            ))}
+            ) : (
+              listings.map((listing) => (
+                <article key={listing.id} className="my-listing-card">
+                  <div className="my-listing-card__image">
+                    <ImagePlaceholder alt="Listing" />
+                  </div>
+
+                  <h2>{listing.title}</h2>
+                  <p>{listing.owner}</p>
+                  <p>{listing.address}</p>
+
+                  <div className="my-listing-card__actions">
+                    <button type="button" onClick={() => onEditListing(listing.id)}>
+                      Edit Post
+                    </button>
+                    <button type="button" onClick={() => onOpenListing(listing.id)}>
+                      Open
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
           </div>
 
           <aside className="my-listings-filter">
@@ -759,7 +802,7 @@ function MessagesBoard({
             {threads.map((thread) => (
               <button
                 key={thread.id}
-                className={`thread-list__item ${thread.id === activeThread.id ? 'thread-list__item--active' : ''}`}
+                className={`thread-list__item ${thread.id === activeThread?.id ? 'thread-list__item--active' : ''}`}
                 type="button"
                 onClick={() => onSelectThread(thread.id)}
               >
@@ -776,21 +819,25 @@ function MessagesBoard({
             ))}
           </aside>
 
-          <section className="conversation-panel" aria-label={`Conversation with ${activeThread.user}`}>
+          <section className="conversation-panel" aria-label={`Conversation with ${activeThread?.user || 'contact'}`}>
             <header>
               <ProfileIcon />
               <div>
-                <p>{activeThread.user}</p>
-                <span>{activeThread.subject}</span>
+                <p>{activeThread?.user || 'No thread selected'}</p>
+                <span>{activeThread?.subject || 'Pick a message thread to begin.'}</span>
               </div>
             </header>
 
             <div className="conversation-panel__messages">
-              {messages.map((message, index) => (
-                <p key={`${message.sender}-${index}`} className={`chat-bubble chat-bubble--${message.sender}`}>
-                  {message.text}
-                </p>
-              ))}
+              {messages.length === 0 ? (
+                <p className="chat-bubble chat-bubble--them">No messages yet.</p>
+              ) : (
+                messages.map((message, index) => (
+                  <p key={`${message.sender}-${index}`} className={`chat-bubble chat-bubble--${message.sender}`}>
+                    {message.text}
+                  </p>
+                ))
+              )}
             </div>
 
             <form
@@ -815,31 +862,147 @@ function MessagesBoard({
   )
 }
 
+function BootScreen() {
+  return (
+    <main className="boot-screen">
+      <div className="boot-screen__card">
+        <span className="boot-screen__logo">LOGO</span>
+        <p>Loading high-fidelity prototype…</p>
+      </div>
+    </main>
+  )
+}
+
 function App() {
   const [board, setBoard] = useState(BOARD.BROWSE)
-  const [activeListingId, setActiveListingId] = useState(LISTINGS[0].id)
-  const [threads, setThreads] = useState(THREADS)
-  const [activeThreadId, setActiveThreadId] = useState(THREADS[0].id)
-  const [chatLog, setChatLog] = useState(INITIAL_CHAT_LOG)
+  const [session, setSession] = useState({ signedIn: false, userId: null })
+  const [profile, setProfile] = useState({
+    firstName: 'Alicia',
+    lastName: 'Stone',
+    classYear: '2027',
+    email: 'alicia.stone@yale.edu',
+    role: 'Looking for housing',
+    about: 'Profile loading...',
+  })
+
+  const [listings, setListings] = useState([])
+  const [threads, setThreads] = useState([])
+  const [chatLog, setChatLog] = useState({})
+
+  const [activeListingId, setActiveListingId] = useState(null)
+  const [activeThreadId, setActiveThreadId] = useState(null)
   const [chatDraft, setChatDraft] = useState('')
 
-  const activeListing = useMemo(
-    () => LISTINGS.find((listing) => listing.id === activeListingId) ?? LISTINGS[0],
-    [activeListingId],
-  )
+  const [isBooting, setIsBooting] = useState(true)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [notice, setNotice] = useState('')
 
-  const activeThread = useMemo(
-    () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0],
-    [threads, activeThreadId],
-  )
+  const hydrateFromSnapshot = (snapshot) => {
+    setSession(snapshot.auth)
+    setProfile(snapshot.user)
+    setListings(snapshot.listings)
+    setThreads(snapshot.threads)
+    setChatLog(snapshot.messages)
 
-  const activeThreadMessages = chatLog[activeThread.id] ?? []
+    setActiveListingId((current) => {
+      if (snapshot.listings.some((listing) => listing.id === current)) {
+        return current
+      }
+      return snapshot.listings[0]?.id || null
+    })
+
+    setActiveThreadId((current) => {
+      if (snapshot.threads.some((thread) => thread.id === current)) {
+        return current
+      }
+      return snapshot.threads[0]?.id || null
+    })
+  }
+
+  const runSnapshotTask = async (task, successMessage = '') => {
+    setIsSyncing(true)
+
+    try {
+      const snapshot = await task()
+      hydrateFromSnapshot(snapshot)
+      if (successMessage) {
+        setNotice(successMessage)
+      }
+      return snapshot
+    } catch (error) {
+      setNotice(error.message || 'Request failed.')
+      return null
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  useEffect(() => {
+    let alive = true
+
+    const bootstrap = async () => {
+      setIsBooting(true)
+
+      try {
+        const snapshot = await backend.bootstrap()
+        if (!alive) {
+          return
+        }
+        hydrateFromSnapshot(snapshot)
+        setBoard(snapshot.auth.signedIn ? BOARD.BROWSE : BOARD.SIGN_IN)
+      } catch {
+        if (alive) {
+          setNotice('Failed to bootstrap local backend.')
+          setBoard(BOARD.SIGN_IN)
+        }
+      } finally {
+        if (alive) {
+          setIsBooting(false)
+        }
+      }
+    }
+
+    bootstrap()
+
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!notice) {
+      return
+    }
+
+    const timerId = setTimeout(() => {
+      setNotice('')
+    }, 2600)
+
+    return () => clearTimeout(timerId)
+  }, [notice])
+
+  const activeListing = useMemo(() => pickActiveById(listings, activeListingId), [listings, activeListingId])
+  const activeThread = useMemo(() => pickActiveById(threads, activeThreadId), [threads, activeThreadId])
+  const activeThreadMessages = activeThread ? chatLog[activeThread.id] || [] : []
 
   const handleMenuClick = (menuItem) => {
-    setBoard(MENU_TO_BOARD[menuItem])
+    const nextBoard = MENU_TO_BOARD[menuItem] || BOARD.BROWSE
+
+    if (!session.signedIn && nextBoard !== BOARD.BROWSE) {
+      setNotice('Please sign in to access this section.')
+      setBoard(BOARD.SIGN_IN)
+      return
+    }
+
+    setBoard(nextBoard)
   }
 
   const handleProfileClick = () => {
+    if (!session.signedIn) {
+      setBoard(BOARD.SIGN_IN)
+      return
+    }
+
     setBoard(BOARD.MY_ACCOUNT)
   }
 
@@ -848,25 +1011,70 @@ function App() {
     setBoard(BOARD.BROWSE_INFO)
   }
 
-  const openThread = (threadId) => {
+  const openThread = async (threadId) => {
     setActiveThreadId(threadId)
-    setThreads((currentThreads) =>
-      currentThreads.map((thread) => (thread.id === threadId ? { ...thread, unread: false } : thread)),
-    )
+    await runSnapshotTask(() => backend.markThreadRead(threadId))
   }
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const text = chatDraft.trim()
-    if (!text) {
+
+    if (!text || !activeThread) {
       return
     }
 
-    setChatLog((currentLog) => ({
-      ...currentLog,
-      [activeThread.id]: [...(currentLog[activeThread.id] ?? []), { sender: 'me', text }],
-    }))
-
     setChatDraft('')
+    await runSnapshotTask(() => backend.sendMessage(activeThread.id, text))
+  }
+
+  const handleAuthSubmit = async ({ mode, data }) => {
+    if (mode === BOARD.CREATE_ACCOUNT) {
+      setIsSyncing(true)
+      try {
+        const response = await backend.createAccount(data)
+        setNotice(response.message)
+        setBoard(BOARD.SIGN_IN)
+      } catch (error) {
+        setNotice(error.message || 'Unable to create account.')
+      } finally {
+        setIsSyncing(false)
+      }
+      return
+    }
+
+    const snapshot = await runSnapshotTask(() => backend.signIn(data), 'Signed in successfully.')
+    if (snapshot) {
+      setBoard(BOARD.BROWSE)
+    }
+  }
+
+  const handleSignOut = async () => {
+    const snapshot = await runSnapshotTask(() => backend.signOut(), 'Signed out.')
+    if (snapshot) {
+      setBoard(BOARD.SIGN_IN)
+    }
+  }
+
+  const handleListingSubmit = async (payload) => {
+    const mode = board === BOARD.EDIT_LISTING ? 'edit' : 'create'
+
+    const snapshot = await runSnapshotTask(
+      () =>
+        backend.upsertListing({
+          mode,
+          listingId: activeListing?.id || undefined,
+          payload,
+        }),
+      mode === 'edit' ? 'Listing updated.' : 'Listing published.',
+    )
+
+    if (snapshot) {
+      setBoard(BOARD.MY_LISTINGS)
+    }
+  }
+
+  if (isBooting) {
+    return <BootScreen />
   }
 
   let renderedBoard = null
@@ -874,6 +1082,7 @@ function App() {
   if (board === BOARD.BROWSE) {
     renderedBoard = (
       <SearchLayout
+        listings={listings}
         showHelp={false}
         onHelpOpen={() => setBoard(BOARD.BROWSE_HELP)}
         onHelpClose={() => setBoard(BOARD.BROWSE)}
@@ -886,6 +1095,7 @@ function App() {
   } else if (board === BOARD.BROWSE_HELP) {
     renderedBoard = (
       <SearchLayout
+        listings={listings}
         showHelp
         onHelpOpen={() => setBoard(BOARD.BROWSE_HELP)}
         onHelpClose={() => setBoard(BOARD.BROWSE)}
@@ -895,9 +1105,10 @@ function App() {
         onProfileClick={handleProfileClick}
       />
     )
-  } else if (board === BOARD.BROWSE_INFO) {
+  } else if (board === BOARD.BROWSE_INFO && activeListing) {
     renderedBoard = (
       <SearchLayout
+        listings={listings}
         showHelp={false}
         onHelpOpen={() => setBoard(BOARD.BROWSE_HELP)}
         onHelpClose={() => setBoard(BOARD.BROWSE)}
@@ -909,14 +1120,20 @@ function App() {
         <ListingInfoModal
           listing={activeListing}
           onClose={() => setBoard(BOARD.BROWSE)}
-          onMessage={() => {
-            openThread(activeListing.threadId)
+          onMessage={async () => {
+            if (!session.signedIn) {
+              setNotice('Please sign in to send messages.')
+              setBoard(BOARD.SIGN_IN)
+              return
+            }
+
+            await openThread(activeListing.threadId)
             setBoard(BOARD.BROWSE_MESSAGE)
           }}
         />
       </SearchLayout>
     )
-  } else if (board === BOARD.BROWSE_MESSAGE) {
+  } else if (board === BOARD.BROWSE_MESSAGE && activeListing && activeThread) {
     renderedBoard = (
       <BrowseMessageBoard
         listing={activeListing}
@@ -932,27 +1149,24 @@ function App() {
     )
   } else if (board === BOARD.CREATE_ACCOUNT || board === BOARD.SIGN_IN) {
     renderedBoard = (
-      <AuthBoard
-        mode={board}
-        onModeChange={setBoard}
-        onSubmit={() => setBoard(board === BOARD.CREATE_ACCOUNT ? BOARD.SIGN_IN : BOARD.BROWSE)}
-        onMenuClick={handleMenuClick}
-        onProfileClick={handleProfileClick}
-      />
+      <AuthBoard mode={board} onModeChange={setBoard} onSubmit={handleAuthSubmit} onMenuClick={handleMenuClick} />
     )
-  } else if (board === BOARD.CREATE_LISTING || board === BOARD.EDIT_LISTING) {
+  } else if ((board === BOARD.CREATE_LISTING || board === BOARD.EDIT_LISTING) && profile) {
     renderedBoard = (
       <ListingEditorBoard
+        key={`${board}-${activeListing?.id || 'new'}-${profile.email}`}
         mode={board}
         listing={activeListing}
+        profile={profile}
         onMenuClick={handleMenuClick}
         onProfileClick={handleProfileClick}
-        onSubmit={() => setBoard(BOARD.MY_LISTINGS)}
+        onSubmit={handleListingSubmit}
       />
     )
   } else if (board === BOARD.MY_LISTINGS) {
     renderedBoard = (
       <MyListingsBoard
+        listings={listings}
         onMenuClick={handleMenuClick}
         onProfileClick={handleProfileClick}
         onEditListing={(listingId) => {
@@ -962,12 +1176,13 @@ function App() {
         onOpenListing={openListing}
       />
     )
-  } else if (board === BOARD.MY_ACCOUNT) {
+  } else if (board === BOARD.MY_ACCOUNT && profile) {
     renderedBoard = (
       <AccountBoard
+        profile={profile}
         onMenuClick={handleMenuClick}
         onProfileClick={handleProfileClick}
-        onSignOut={() => setBoard(BOARD.SIGN_IN)}
+        onSignOut={handleSignOut}
       />
     )
   } else {
@@ -986,7 +1201,19 @@ function App() {
     )
   }
 
-  return <main className="app-root">{renderedBoard}</main>
+  return (
+    <main className="app-root">
+      {renderedBoard}
+
+      {isSyncing ? (
+        <div className="async-status" aria-live="polite">
+          <span className="async-status__dot" /> Syncing with local backend…
+        </div>
+      ) : null}
+
+      {notice ? <div className="floating-notice">{notice}</div> : null}
+    </main>
+  )
 }
 
 export default App

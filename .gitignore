@@ -34,3 +34,5 @@ coverage/
 
 # Build caches
 .cache/
+
+.agents/
