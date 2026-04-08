@@ -1,12 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  Bath,
+  BedDouble,
+  Bike,
+  CalendarDays,
+  Flame,
+  MapPin,
+  PawPrint,
+  Ruler,
+  Search,
+  Shirt,
+  Wallet,
+} from 'lucide-react'
+import L from 'leaflet'
+import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import './App.css'
 import { backend } from './mockBackend'
 
 const IMAGE_ICON_URL = 'https://www.figma.com/api/mcp/asset/d7b50615-b081-4bba-907f-ebb8f753008b'
-const MAP_IMAGE_URL = 'https://www.figma.com/api/mcp/asset/66c803f4-8106-456b-81d0-f22108fa7504'
-const MARKER_URL = 'https://www.figma.com/api/mcp/asset/e47d0a65-8bd4-44ed-a091-1c6d7d3e8dc3'
-const CLUSTER_MARKER_URL = 'https://www.figma.com/api/mcp/asset/572be55f-9830-463a-a20c-8bb279ce807d'
 const CHECK_ICON_URL = 'https://www.figma.com/api/mcp/asset/a000b48d-84ad-4da3-b41b-67e0cd2a196e'
+const MAP_CENTER = [41.3083, -72.9279]
 
 const BOARD = {
   BROWSE: 'browse',
@@ -14,6 +27,7 @@ const BOARD = {
   BROWSE_INFO: 'browse_info',
   BROWSE_MESSAGE: 'browse_message',
   CREATE_ACCOUNT: 'create_account',
+  VERIFY_ACCOUNT: 'verify_account',
   SIGN_IN: 'sign_in',
   CREATE_LISTING: 'create_listing',
   EDIT_LISTING: 'edit_listing',
@@ -22,10 +36,10 @@ const BOARD = {
   MY_ACCOUNT: 'my_account',
 }
 
-const MENU_ITEMS = ['Browse', 'Create Listing', 'Messages', 'My Listings']
+const MENU_ITEMS = ['Browse Listings', 'Create Listing', 'Messages', 'My Listings']
 
 const MENU_TO_BOARD = {
-  Browse: BOARD.BROWSE,
+  'Browse Listings': BOARD.BROWSE,
   'Create Listing': BOARD.CREATE_LISTING,
   Messages: BOARD.MESSAGES,
   'My Listings': BOARD.MY_LISTINGS,
@@ -48,6 +62,62 @@ function pickActiveById(items, id) {
   }
 
   return items.find((item) => item.id === id) || items[0]
+}
+
+function leaseDurationLabel(lease = '') {
+  const match = lease.match(/^(\d+\s+(?:year|month)s?)/i)
+  return match ? match[1] : lease
+}
+
+function numericPrice(priceLabel = '') {
+  const digits = String(priceLabel).replace(/[^\d]/g, '')
+  return Number(digits || '0')
+}
+
+function distanceMiles(distanceLabel = '') {
+  const match = String(distanceLabel).match(/(\d+(?:\.\d+)?)\s*mi/i)
+  return match ? Number(match[1]) : 0
+}
+
+function normalizedDistanceLabel(distanceLabel = '') {
+  return String(distanceLabel).replace('from center of campus', 'from campus')
+}
+
+function resolvedPetPolicy(listing) {
+  if (listing.petPolicy) {
+    return listing.petPolicy
+  }
+
+  if (listing.amenities?.includes('Pet Friendly')) {
+    return 'Pets allowed'
+  }
+
+  return 'No pets'
+}
+
+function hasInUnitLaundry(listing) {
+  return Boolean(listing.inUnitLaundry || listing.amenities?.includes('In House Laundry'))
+}
+
+function featurePills(listing) {
+  const pills = []
+  const petPolicy = resolvedPetPolicy(listing)
+
+  pills.push({ icon: PawPrint, label: petPolicy })
+
+  if (hasInUnitLaundry(listing)) {
+    pills.push({ icon: Shirt, label: 'In-unit laundry' })
+  }
+
+  if (listing.amenities?.includes('Heating Included')) {
+    pills.push({ icon: Flame, label: 'Heating included' })
+  }
+
+  if (listing.amenities?.includes('Bike Storage')) {
+    pills.push({ icon: Bike, label: 'Bike storage' })
+  }
+
+  return pills
 }
 
 function ProfileIcon() {
@@ -132,19 +202,54 @@ function WireframeHeader({
 }
 
 function ListingCard({ listing, onSeeMore }) {
+  const leaseLabel = leaseDurationLabel(listing.lease)
+  const distanceLabel = normalizedDistanceLabel(listing.distance)
+  const pills = featurePills(listing)
+
   return (
     <article className="listing-card" aria-label={`${listing.title} listing`}>
       <div className="listing-card__image-shell">
-        <ImagePlaceholder alt="Listing" />
+        <img className="listing-card__image" src={listing.imageUrl || IMAGE_ICON_URL} alt={listing.title} />
       </div>
 
       <div className="listing-card__content">
         <h2>{listing.title}</h2>
-        <p>{listing.owner}</p>
-        <p>{listing.address}</p>
-        <p>{listing.rentLabel}</p>
-        <p>{listing.distance}</p>
-        <p>{listing.lease}</p>
+        <p className="listing-card__owner">Listed by {listing.owner}</p>
+        <p className="listing-card__address">{listing.address}</p>
+
+        <div className="listing-card__stats">
+          <span className="property-pill">
+            <Wallet size={14} aria-hidden="true" />
+            {listing.rentLabel}
+          </span>
+          <span className="property-pill">
+            <BedDouble size={14} aria-hidden="true" />
+            {listing.beds} bd
+          </span>
+          <span className="property-pill">
+            <Bath size={14} aria-hidden="true" />
+            {listing.baths} ba
+          </span>
+          <span className="property-pill">
+            <Ruler size={14} aria-hidden="true" />
+            {listing.sqFt} sq ft
+          </span>
+          <span className="property-pill">
+            <MapPin size={14} aria-hidden="true" />
+            {distanceLabel}
+          </span>
+          <span className="property-pill">
+            <CalendarDays size={14} aria-hidden="true" />
+            {leaseLabel}
+          </span>
+
+          {pills.map((pill) => (
+            <span key={pill.label} className="property-pill property-pill--feature">
+              <pill.icon size={14} aria-hidden="true" />
+              {pill.label}
+            </span>
+          ))}
+        </div>
       </div>
 
       {onSeeMore ? (
@@ -158,26 +263,70 @@ function ListingCard({ listing, onSeeMore }) {
   )
 }
 
-function MapPanel({ showHelp, onHelpOpen, onHelpClose }) {
+function MapPanel({ listings, showHelp, onHelpOpen, onHelpClose, onOpenListing }) {
+  const validListings = useMemo(
+    () => listings.filter((listing) => Number.isFinite(listing.lat) && Number.isFinite(listing.lng)),
+    [listings],
+  )
+
+  const tileSources = [
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  ]
+  const [tileIndex, setTileIndex] = useState(0)
+
+  const mapPinIcon = useMemo(
+    () =>
+      L.divIcon({
+        className: 'listing-map-pin',
+        html: '<span></span>',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      }),
+    [],
+  )
+
   return (
     <section className="map-panel" aria-label="Map of listings">
-      <img className="map-panel__image" src={MAP_IMAGE_URL} alt="Listing map" />
+      <MapContainer
+        center={MAP_CENTER}
+        zoom={13}
+        scrollWheelZoom
+        className="map-panel__map"
+        attributionControl
+        style={{ height: '100%', width: '100%' }}
+      >
+        <MapResizeFix />
+        <MapFitBounds listings={validListings} />
+        <TileLayer
+          attribution='&copy; OpenStreetMap contributors'
+          url={tileSources[tileIndex]}
+          eventHandlers={{
+            tileerror: () => {
+              setTileIndex((current) => (current < tileSources.length - 1 ? current + 1 : current))
+            },
+          }}
+        />
 
-      <div className="map-controls">
-        <button type="button" aria-label="Zoom in">
-          +
-        </button>
-        <button type="button" aria-label="Zoom out">
-          -
-        </button>
-        <button type="button" aria-label="Map help" onClick={showHelp ? onHelpClose : onHelpOpen}>
-          ?
-        </button>
-      </div>
+        {validListings.map((listing) => (
+          <Marker key={listing.id} position={[listing.lat, listing.lng]} icon={mapPinIcon}>
+            <Popup>
+              <div className="map-popup">
+                <img src={listing.imageUrl} alt={listing.title} />
+                <p>{listing.title}</p>
+                <span>{listing.rentLabel}</span>
+                <button type="button" onClick={() => onOpenListing(listing.id)}>
+                  View listing
+                </button>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
 
-      <img className="marker marker--one" src={MARKER_URL} alt="" />
-      <img className="marker marker--two" src={MARKER_URL} alt="" />
-      <img className="marker marker--three" src={CLUSTER_MARKER_URL} alt="" />
+      <button className="map-help-toggle" type="button" aria-label="Map help" onClick={showHelp ? onHelpClose : onHelpOpen}>
+        {showHelp ? 'Hide map help' : 'Map help'}
+      </button>
 
       {showHelp ? (
         <aside className="map-help" aria-live="polite">
@@ -194,8 +343,39 @@ function MapPanel({ showHelp, onHelpOpen, onHelpClose }) {
   )
 }
 
+function MapResizeFix() {
+  const map = useMap()
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize()
+    }, 0)
+
+    return () => clearTimeout(timer)
+  }, [map])
+
+  return null
+}
+
+function MapFitBounds({ listings }) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (listings.length === 0) {
+      map.setView(MAP_CENTER, 13)
+      return
+    }
+
+    const bounds = L.latLngBounds(listings.map((listing) => [listing.lat, listing.lng]))
+    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 })
+  }, [listings, map])
+
+  return null
+}
+
 function SearchLayout({
   listings,
+  mapListings,
   showHelp,
   onHelpOpen,
   onHelpClose,
@@ -203,42 +383,217 @@ function SearchLayout({
   activeMenu,
   onMenuClick,
   onProfileClick,
+  searchQuery,
+  onSearchQueryChange,
+  minBeds,
+  onMinBedsChange,
+  minBaths,
+  onMinBathsChange,
+  maxPrice,
+  onMaxPriceChange,
+  maxPriceBound,
+  maxDistance,
+  onMaxDistanceChange,
+  maxDistanceBound,
+  petPolicy,
+  onPetPolicyChange,
+  requireLaundry,
+  onRequireLaundryChange,
+  requireHeating,
+  onRequireHeatingChange,
+  requireBikeStorage,
+  onRequireBikeStorageChange,
+  currentPage,
+  totalPages,
+  onPageChange,
   children,
 }) {
+  const firstRowListings = listings.slice(0, 2)
+  const remainingListings = listings.slice(2)
+
   return (
     <div className="board board--search">
       <WireframeHeader activeMenu={activeMenu} onMenuClick={onMenuClick} onProfileClick={onProfileClick} />
 
       <section className="search-body">
-        <h1>Find Housing</h1>
+        <h1>Browse Listings</h1>
 
-        <div className="search-row" role="search">
-          <div className="search-row__bar">Search</div>
-          <button className="search-row__filters" type="button">
-            Filters
-          </button>
+        <div className="results-controls" role="search">
+          <div className="search-row">
+            <Search size={16} aria-hidden="true" />
+            <input
+              id="listing-search-input"
+              className="search-row__input"
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange(event.target.value)}
+              placeholder="Search by title, owner, or address"
+              aria-label="Search listings"
+            />
+            <button
+              type="button"
+              className="search-row__action"
+              onClick={() => onSearchQueryChange(searchQuery.trim())}
+            >
+              Search
+            </button>
+          </div>
+
+          <div className="icon-filters">
+            <label className="icon-filter" htmlFor="min-beds-filter">
+              <BedDouble size={14} aria-hidden="true" />
+              Beds
+              <select
+                id="min-beds-filter"
+                value={minBeds}
+                onChange={(event) => onMinBedsChange(Number(event.target.value))}
+              >
+                <option value={0}>Any</option>
+                <option value={1}>1+</option>
+                <option value={2}>2+</option>
+                <option value={3}>3+</option>
+              </select>
+            </label>
+
+            <label className="icon-filter" htmlFor="min-baths-filter">
+              <Bath size={14} aria-hidden="true" />
+              Baths
+              <select
+                id="min-baths-filter"
+                value={minBaths}
+                onChange={(event) => onMinBathsChange(Number(event.target.value))}
+              >
+                <option value={0}>Any</option>
+                <option value={1}>1+</option>
+                <option value={2}>2+</option>
+              </select>
+            </label>
+
+            <label className="icon-filter icon-filter--slider" htmlFor="max-price-filter">
+              <Wallet size={14} aria-hidden="true" />
+              Max Price ${maxPrice.toLocaleString()}
+              <input
+                id="max-price-filter"
+                type="range"
+                min={0}
+                max={maxPriceBound}
+                step={50}
+                value={maxPrice}
+                onChange={(event) => onMaxPriceChange(Number(event.target.value))}
+              />
+            </label>
+
+            <label className="icon-filter icon-filter--slider" htmlFor="max-distance-filter">
+              <MapPin size={14} aria-hidden="true" />
+              Distance ≤ {maxDistance.toFixed(1)} mi
+              <input
+                id="max-distance-filter"
+                type="range"
+                min={0.1}
+                max={maxDistanceBound}
+                step={0.1}
+                value={maxDistance}
+                onChange={(event) => onMaxDistanceChange(Number(event.target.value))}
+              />
+            </label>
+
+            <label className="icon-filter" htmlFor="pet-policy-filter">
+              <PawPrint size={14} aria-hidden="true" />
+              Pets
+              <select
+                id="pet-policy-filter"
+                value={petPolicy}
+                onChange={(event) => onPetPolicyChange(event.target.value)}
+              >
+                <option value="any">Any</option>
+                <option value="pets">Pets allowed</option>
+                <option value="cats">Only cats allowed</option>
+                <option value="none">No pets</option>
+              </select>
+            </label>
+
+            <label className="icon-filter icon-filter--check" htmlFor="in-unit-laundry-filter">
+              <Shirt size={14} aria-hidden="true" />
+              In-unit Laundry
+              <input
+                id="in-unit-laundry-filter"
+                type="checkbox"
+                checked={requireLaundry}
+                onChange={(event) => onRequireLaundryChange(event.target.checked)}
+              />
+            </label>
+
+            <label className="icon-filter icon-filter--check" htmlFor="heating-filter">
+              <Flame size={14} aria-hidden="true" />
+              Heating Included
+              <input
+                id="heating-filter"
+                type="checkbox"
+                checked={requireHeating}
+                onChange={(event) => onRequireHeatingChange(event.target.checked)}
+              />
+            </label>
+
+            <label className="icon-filter icon-filter--check" htmlFor="bike-storage-filter">
+              <Bike size={14} aria-hidden="true" />
+              Bike Storage
+              <input
+                id="bike-storage-filter"
+                type="checkbox"
+                checked={requireBikeStorage}
+                onChange={(event) => onRequireBikeStorageChange(event.target.checked)}
+              />
+            </label>
+          </div>
         </div>
 
-        <div className="results-layout">
-          <div className="results-feed">
-            {listings.length === 0 ? (
+        <div className="results-shell">
+          <div className="results-left">
+            <div className="results-feed results-feed--top">
+            {firstRowListings.length === 0 ? (
               <EmptyListingCard />
             ) : (
-              listings.map((listing) => (
+              firstRowListings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} onSeeMore={() => onOpenListing(listing.id)} />
               ))
             )}
+            </div>
+
+            {remainingListings.length > 0 ? (
+              <div className="results-feed results-feed--below">
+                {remainingListings.map((listing) => (
+                  <ListingCard key={listing.id} listing={listing} onSeeMore={() => onOpenListing(listing.id)} />
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <aside className="results-map-rail">
-            <MapPanel showHelp={showHelp} onHelpOpen={onHelpOpen} onHelpClose={onHelpClose} />
+            <MapPanel
+              listings={mapListings}
+              showHelp={showHelp}
+              onHelpOpen={onHelpOpen}
+              onHelpClose={onHelpClose}
+              onOpenListing={onOpenListing}
+            />
           </aside>
+        </div>
+
+        <div className="browse-pagination" aria-label="Listings pagination">
+          <button type="button" disabled={currentPage <= 1} onClick={() => onPageChange(currentPage - 1)}>
+            Previous
+          </button>
+          <p>
+            Page {currentPage} of {totalPages}
+          </p>
+          <button type="button" disabled={currentPage >= totalPages} onClick={() => onPageChange(currentPage + 1)}>
+            Next
+          </button>
         </div>
       </section>
 
       <footer className="map-credit">
-        <p>Map image by thecreation.design on Figma</p>
-        <p>Map image edited with Gemini Nano Banana</p>
+        <p>Interactive map data: OpenStreetMap contributors</p>
+        <p>Click any pin to preview and open a listing</p>
       </footer>
 
       {children}
@@ -247,6 +602,10 @@ function SearchLayout({
 }
 
 function ListingInfoModal({ listing, onClose, onMessage }) {
+  const leaseLabel = leaseDurationLabel(listing.lease)
+  const distanceLabel = normalizedDistanceLabel(listing.distance)
+  const pills = featurePills(listing)
+
   return (
     <div className="listing-modal-backdrop" role="dialog" aria-modal="true" aria-label="Listing details">
       <section className="listing-modal">
@@ -259,10 +618,10 @@ function ListingInfoModal({ listing, onClose, onMessage }) {
 
         <div className="listing-modal__carousel">
           <div className="listing-modal__image-block">
-            <ImagePlaceholder alt="Listing preview" />
+            <img className="listing-modal__image" src={listing.imageUrl || IMAGE_ICON_URL} alt={listing.title} />
           </div>
           <div className="listing-modal__image-block">
-            <ImagePlaceholder alt="Listing preview" />
+            <img className="listing-modal__image" src={listing.imageUrl || IMAGE_ICON_URL} alt={listing.title} />
           </div>
           <button className="listing-modal__chevron" type="button" aria-label="Next image">
             {'>'}
@@ -274,8 +633,37 @@ function ListingInfoModal({ listing, onClose, onMessage }) {
             <h2>{listing.title}</h2>
             <p className="listing-modal__owner">{listing.owner}</p>
             <p>{listing.address}</p>
-            <p>{listing.distance.replace('mi', ' mi')}</p>
+            <p>{distanceLabel.replace('mi', ' mi')}</p>
             <p>{listing.lease}</p>
+
+            <div className="listing-modal__stats">
+              <span className="property-pill">
+                <Wallet size={14} aria-hidden="true" />
+                {listing.rentLabel}
+              </span>
+              <span className="property-pill">
+                <BedDouble size={14} aria-hidden="true" />
+                {listing.beds} bd
+              </span>
+              <span className="property-pill">
+                <Bath size={14} aria-hidden="true" />
+                {listing.baths} ba
+              </span>
+              <span className="property-pill">
+                <Ruler size={14} aria-hidden="true" />
+                {listing.sqFt} sq ft
+              </span>
+              <span className="property-pill">
+                <CalendarDays size={14} aria-hidden="true" />
+                {leaseLabel}
+              </span>
+              {pills.map((pill) => (
+                <span key={pill.label} className="property-pill property-pill--feature">
+                  <pill.icon size={14} aria-hidden="true" />
+                  {pill.label}
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="listing-modal__price">
@@ -319,20 +707,20 @@ function BrowseMessageBoard({
   onMenuClick,
   onProfileClick,
 }) {
+  const distanceLabel = normalizedDistanceLabel(listing.distance)
+
   return (
     <div className="board board--message-open">
-      <WireframeHeader activeMenu="Browse" onMenuClick={onMenuClick} onProfileClick={onProfileClick} />
+      <WireframeHeader activeMenu="Browse Listings" onMenuClick={onMenuClick} onProfileClick={onProfileClick} />
 
       <section className="message-open-layout">
         <div className="message-open-left">
           <div className="message-open-carousel">
             <div className="message-open-image">
-              <ImagePlaceholder alt="Listing preview" />
+              <img className="message-open-photo" src={listing.imageUrl || IMAGE_ICON_URL} alt={listing.title} />
             </div>
             <div className="message-open-image message-open-image--tail">
-              <button className="message-open-chevron" type="button" aria-label="Next image">
-                {'>'}
-              </button>
+              <img className="message-open-photo" src={listing.imageUrl || IMAGE_ICON_URL} alt={listing.title} />
             </div>
           </div>
 
@@ -341,7 +729,7 @@ function BrowseMessageBoard({
               <h2>{listing.title}</h2>
               <p className="message-open-meta__owner">{listing.owner}</p>
               <p>{listing.address}</p>
-              <p>{listing.distance.replace('mi', ' mi')}</p>
+              <p>{distanceLabel.replace('mi', ' mi')}</p>
               <p>{listing.lease}</p>
             </div>
             <div className="message-open-meta__price">
@@ -396,8 +784,10 @@ function BrowseMessageBoard({
   )
 }
 
-function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick }) {
+function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick, pendingVerification }) {
   const isCreate = mode === BOARD.CREATE_ACCOUNT
+  const isVerify = mode === BOARD.VERIFY_ACCOUNT
+  const isSignIn = mode === BOARD.SIGN_IN
 
   const [createForm, setCreateForm] = useState({
     firstName: '',
@@ -412,6 +802,13 @@ function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick }) {
     email: '',
     password: '',
   })
+
+  const [verifyForm, setVerifyForm] = useState({
+    email: '',
+    code: '',
+  })
+
+  const verifyEmailValue = verifyForm.email || pendingVerification.email || ''
 
   return (
     <div className="board board--auth">
@@ -435,7 +832,7 @@ function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick }) {
             </button>
             <button
               type="button"
-              className={!isCreate ? 'auth-switcher__active' : ''}
+              className={isSignIn ? 'auth-switcher__active' : ''}
               onClick={() => onModeChange(BOARD.SIGN_IN)}
             >
               Sign In
@@ -517,6 +914,47 @@ function AuthBoard({ mode, onModeChange, onSubmit, onMenuClick }) {
                 onClick={() => onSubmit({ mode, data: createForm })}
               >
                 Send Verification Code →
+              </button>
+            </form>
+          ) : isVerify ? (
+            <form className="auth-form auth-form--verify" onSubmit={(event) => event.preventDefault()}>
+              <h2>Verify Email Account</h2>
+              <p className="auth-verify-copy">
+                We sent a 6-digit verification code to your university email. Enter it below to activate your account.
+              </p>
+
+              <label>
+                University Email
+                <input
+                  type="email"
+                  value={verifyEmailValue}
+                  onChange={(event) => setVerifyForm((prev) => ({ ...prev, email: event.target.value }))}
+                />
+              </label>
+
+              <label>
+                Verification Code
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={verifyForm.code}
+                  onChange={(event) => setVerifyForm((prev) => ({ ...prev, code: event.target.value }))}
+                />
+              </label>
+
+              {pendingVerification.devCode ? (
+                <small className="auth-dev-note">
+                  Prototype email preview code: {pendingVerification.devCode}
+                </small>
+              ) : null}
+
+              <button
+                className="auth-submit"
+                type="button"
+                onClick={() => onSubmit({ mode, data: verifyForm })}
+              >
+                Verify Email →
               </button>
             </form>
           ) : (
@@ -874,6 +1312,7 @@ function BootScreen() {
 }
 
 function App() {
+  const BROWSE_PAGE_SIZE = 8
   const [board, setBoard] = useState(BOARD.BROWSE)
   const [session, setSession] = useState({ signedIn: false, userId: null })
   const [profile, setProfile] = useState({
@@ -892,10 +1331,21 @@ function App() {
   const [activeListingId, setActiveListingId] = useState(null)
   const [activeThreadId, setActiveThreadId] = useState(null)
   const [chatDraft, setChatDraft] = useState('')
+  const [browsePage, setBrowsePage] = useState(1)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [minBeds, setMinBeds] = useState(0)
+  const [minBaths, setMinBaths] = useState(0)
+  const [maxDistance, setMaxDistance] = useState(3)
+  const [petPolicy, setPetPolicy] = useState('any')
+  const [requireLaundry, setRequireLaundry] = useState(false)
+  const [requireHeating, setRequireHeating] = useState(false)
+  const [requireBikeStorage, setRequireBikeStorage] = useState(false)
 
   const [isBooting, setIsBooting] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
   const [notice, setNotice] = useState('')
+  const [pendingVerification, setPendingVerification] = useState({ email: '', devCode: '' })
+  const [pendingRegistrationData, setPendingRegistrationData] = useState(null)
 
   const hydrateFromSnapshot = (snapshot) => {
     setSession(snapshot.auth)
@@ -985,6 +1435,78 @@ function App() {
   const activeThread = useMemo(() => pickActiveById(threads, activeThreadId), [threads, activeThreadId])
   const activeThreadMessages = activeThread ? chatLog[activeThread.id] || [] : []
 
+  const maxPriceBound = useMemo(() => {
+    const prices = listings.map((listing) => numericPrice(listing.price)).filter((price) => price > 0)
+    return prices.length > 0 ? Math.max(...prices) : 3000
+  }, [listings])
+
+  const maxDistanceBound = useMemo(() => {
+    const distances = listings.map((listing) => distanceMiles(listing.distance)).filter((distance) => distance > 0)
+    return distances.length > 0 ? Math.max(...distances) : 3
+  }, [listings])
+
+  const [maxPrice, setMaxPrice] = useState(maxPriceBound)
+
+  useEffect(() => {
+    setMaxPrice((current) => (current > maxPriceBound ? maxPriceBound : current || maxPriceBound))
+  }, [maxPriceBound])
+
+  useEffect(() => {
+    setMaxDistance((current) => (current > maxDistanceBound ? maxDistanceBound : current || maxDistanceBound))
+  }, [maxDistanceBound])
+
+  const filteredListings = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+
+    return listings.filter((listing) => {
+      const textMatch =
+        query.length === 0
+        || listing.title.toLowerCase().includes(query)
+        || listing.owner.toLowerCase().includes(query)
+        || listing.address.toLowerCase().includes(query)
+
+      const bedsMatch = Number(listing.beds || 0) >= minBeds
+      const bathsMatch = Number(listing.baths || 0) >= minBaths
+      const priceMatch = numericPrice(listing.price) <= maxPrice
+      const distanceMatch = distanceMiles(listing.distance) <= maxDistance
+
+      const listingPetPolicy = resolvedPetPolicy(listing)
+      const petMatch =
+        petPolicy === 'any'
+        || (petPolicy === 'pets' && listingPetPolicy === 'Pets allowed')
+        || (petPolicy === 'cats' && listingPetPolicy === 'Only cats allowed')
+        || (petPolicy === 'none' && listingPetPolicy === 'No pets')
+
+      const laundryMatch = !requireLaundry || hasInUnitLaundry(listing)
+      const heatingMatch = !requireHeating || listing.amenities?.includes('Heating Included')
+      const bikeMatch = !requireBikeStorage || listing.amenities?.includes('Bike Storage')
+
+      return textMatch && bedsMatch && bathsMatch && priceMatch && distanceMatch && petMatch && laundryMatch && heatingMatch && bikeMatch
+    })
+  }, [
+    listings,
+    searchQuery,
+    minBeds,
+    minBaths,
+    maxPrice,
+    maxDistance,
+    petPolicy,
+    requireLaundry,
+    requireHeating,
+    requireBikeStorage,
+  ])
+
+  const totalBrowsePages = Math.max(1, Math.ceil(filteredListings.length / BROWSE_PAGE_SIZE))
+
+  const pagedListings = useMemo(() => {
+    const start = (browsePage - 1) * BROWSE_PAGE_SIZE
+    return filteredListings.slice(start, start + BROWSE_PAGE_SIZE)
+  }, [filteredListings, browsePage])
+
+  useEffect(() => {
+    setBrowsePage((current) => Math.min(current, totalBrowsePages))
+  }, [totalBrowsePages])
+
   const handleMenuClick = (menuItem) => {
     const nextBoard = MENU_TO_BOARD[menuItem] || BOARD.BROWSE
 
@@ -1033,11 +1555,30 @@ function App() {
       try {
         const response = await backend.createAccount(data)
         setNotice(response.message)
-        setBoard(BOARD.SIGN_IN)
+        setPendingRegistrationData(data)
+        setPendingVerification({
+          email: response.email || data.email || '',
+          devCode: response.devVerificationCode || '',
+        })
+        setBoard(BOARD.VERIFY_ACCOUNT)
       } catch (error) {
         setNotice(error.message || 'Unable to create account.')
       } finally {
         setIsSyncing(false)
+      }
+      return
+    }
+
+    if (mode === BOARD.VERIFY_ACCOUNT) {
+      const snapshot = await runSnapshotTask(
+        () => backend.verifyUniversityEmail({ ...data, profileData: pendingRegistrationData }),
+        'Email verified and signed in.',
+      )
+
+      if (snapshot) {
+        setPendingRegistrationData(null)
+        setPendingVerification({ email: '', devCode: '' })
+        setBoard(BOARD.MY_ACCOUNT)
       }
       return
     }
@@ -1082,40 +1623,112 @@ function App() {
   if (board === BOARD.BROWSE) {
     renderedBoard = (
       <SearchLayout
-        listings={listings}
+        listings={pagedListings}
+        mapListings={filteredListings}
         showHelp={false}
         onHelpOpen={() => setBoard(BOARD.BROWSE_HELP)}
         onHelpClose={() => setBoard(BOARD.BROWSE)}
         onOpenListing={openListing}
-        activeMenu="Browse"
+        activeMenu="Browse Listings"
         onMenuClick={handleMenuClick}
         onProfileClick={handleProfileClick}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        minBeds={minBeds}
+        onMinBedsChange={setMinBeds}
+        minBaths={minBaths}
+        onMinBathsChange={setMinBaths}
+        maxPrice={maxPrice}
+        onMaxPriceChange={setMaxPrice}
+        maxPriceBound={maxPriceBound}
+        maxDistance={maxDistance}
+        onMaxDistanceChange={setMaxDistance}
+        maxDistanceBound={maxDistanceBound}
+        petPolicy={petPolicy}
+        onPetPolicyChange={setPetPolicy}
+        requireLaundry={requireLaundry}
+        onRequireLaundryChange={setRequireLaundry}
+        requireHeating={requireHeating}
+        onRequireHeatingChange={setRequireHeating}
+        requireBikeStorage={requireBikeStorage}
+        onRequireBikeStorageChange={setRequireBikeStorage}
+        currentPage={browsePage}
+        totalPages={totalBrowsePages}
+        onPageChange={setBrowsePage}
       />
     )
   } else if (board === BOARD.BROWSE_HELP) {
     renderedBoard = (
       <SearchLayout
-        listings={listings}
+        listings={pagedListings}
+        mapListings={filteredListings}
         showHelp
         onHelpOpen={() => setBoard(BOARD.BROWSE_HELP)}
         onHelpClose={() => setBoard(BOARD.BROWSE)}
         onOpenListing={openListing}
-        activeMenu="Browse"
+        activeMenu="Browse Listings"
         onMenuClick={handleMenuClick}
         onProfileClick={handleProfileClick}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        minBeds={minBeds}
+        onMinBedsChange={setMinBeds}
+        minBaths={minBaths}
+        onMinBathsChange={setMinBaths}
+        maxPrice={maxPrice}
+        onMaxPriceChange={setMaxPrice}
+        maxPriceBound={maxPriceBound}
+        maxDistance={maxDistance}
+        onMaxDistanceChange={setMaxDistance}
+        maxDistanceBound={maxDistanceBound}
+        petPolicy={petPolicy}
+        onPetPolicyChange={setPetPolicy}
+        requireLaundry={requireLaundry}
+        onRequireLaundryChange={setRequireLaundry}
+        requireHeating={requireHeating}
+        onRequireHeatingChange={setRequireHeating}
+        requireBikeStorage={requireBikeStorage}
+        onRequireBikeStorageChange={setRequireBikeStorage}
+        currentPage={browsePage}
+        totalPages={totalBrowsePages}
+        onPageChange={setBrowsePage}
       />
     )
   } else if (board === BOARD.BROWSE_INFO && activeListing) {
     renderedBoard = (
       <SearchLayout
-        listings={listings}
+        listings={pagedListings}
+        mapListings={filteredListings}
         showHelp={false}
         onHelpOpen={() => setBoard(BOARD.BROWSE_HELP)}
         onHelpClose={() => setBoard(BOARD.BROWSE)}
         onOpenListing={openListing}
-        activeMenu="Browse"
+        activeMenu="Browse Listings"
         onMenuClick={handleMenuClick}
         onProfileClick={handleProfileClick}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        minBeds={minBeds}
+        onMinBedsChange={setMinBeds}
+        minBaths={minBaths}
+        onMinBathsChange={setMinBaths}
+        maxPrice={maxPrice}
+        onMaxPriceChange={setMaxPrice}
+        maxPriceBound={maxPriceBound}
+        maxDistance={maxDistance}
+        onMaxDistanceChange={setMaxDistance}
+        maxDistanceBound={maxDistanceBound}
+        petPolicy={petPolicy}
+        onPetPolicyChange={setPetPolicy}
+        requireLaundry={requireLaundry}
+        onRequireLaundryChange={setRequireLaundry}
+        requireHeating={requireHeating}
+        onRequireHeatingChange={setRequireHeating}
+        requireBikeStorage={requireBikeStorage}
+        onRequireBikeStorageChange={setRequireBikeStorage}
+        currentPage={browsePage}
+        totalPages={totalBrowsePages}
+        onPageChange={setBrowsePage}
       >
         <ListingInfoModal
           listing={activeListing}
@@ -1147,9 +1760,15 @@ function App() {
         onProfileClick={handleProfileClick}
       />
     )
-  } else if (board === BOARD.CREATE_ACCOUNT || board === BOARD.SIGN_IN) {
+  } else if (board === BOARD.CREATE_ACCOUNT || board === BOARD.VERIFY_ACCOUNT || board === BOARD.SIGN_IN) {
     renderedBoard = (
-      <AuthBoard mode={board} onModeChange={setBoard} onSubmit={handleAuthSubmit} onMenuClick={handleMenuClick} />
+      <AuthBoard
+        mode={board}
+        onModeChange={setBoard}
+        onSubmit={handleAuthSubmit}
+        onMenuClick={handleMenuClick}
+        pendingVerification={pendingVerification}
+      />
     )
   } else if ((board === BOARD.CREATE_LISTING || board === BOARD.EDIT_LISTING) && profile) {
     renderedBoard = (
