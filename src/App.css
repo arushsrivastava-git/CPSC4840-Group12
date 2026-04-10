@@ -113,6 +113,16 @@ button:focus-visible {
   font-weight: 700;
   letter-spacing: 0.03em;
   color: var(--text);
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+  margin: -8px 0 -8px -12px;
+}
+
+.menu-bar__logo:hover {
+  background: var(--surface-soft);
+  color: var(--accent);
 }
 
 .menu-bar__nav {
@@ -133,6 +143,10 @@ button:focus-visible {
   cursor: pointer;
   height: 38px;
   padding: 0 14px;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  transition: all 0.15s ease;
 }
 
 .menu-bar__tab:hover {
@@ -150,9 +164,39 @@ button:focus-visible {
 .menu-auth-links {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
+.menu-bar__auth-link {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  height: 38px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.menu-bar__auth-link:hover {
+  border-color: var(--stroke);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.menu-bar__auth-link--active {
+  background: rgba(184, 227, 233, 0.26);
+  border-color: var(--stroke-strong);
+  color: var(--text);
+}
+
+/* Legacy button styles - keeping for backward compatibility */
 .menu-auth-links button {
   border: 0;
   background: transparent;
