@@ -623,6 +623,7 @@ function sanitizeListingInput(input, fallbackListing = null) {
 
   const beds = Number(input.beds ?? fallbackListing?.beds ?? 2)
   const baths = Number(input.baths ?? fallbackListing?.baths ?? 1)
+  const petPolicy = input.petPolicy || fallbackListing?.petPolicy || 'No pets'
   const sqFt = Number(input.sqFt ?? fallbackListing?.sqFt ?? 850)
   const lat = Number(input.lat ?? fallbackListing?.lat ?? 41.3083)
   const lng = Number(input.lng ?? fallbackListing?.lng ?? -72.9279)
@@ -645,6 +646,7 @@ function sanitizeListingInput(input, fallbackListing = null) {
     roommates: input.roommates || fallbackListing?.roommates || '2 roommates',
     beds,
     baths,
+    petPolicy,
     sqFt,
     lat,
     lng,

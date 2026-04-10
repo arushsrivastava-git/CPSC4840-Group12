@@ -1042,6 +1042,9 @@ function ListingEditorBoard({ mode, listing, profile, onMenuClick, onProfileClic
     price: listing?.price || '$1,200 / month',
     lease: listing?.lease || '1 year lease - Starts Sep 1',
     description: listing?.description || '',
+    beds: listing?.beds || 1,
+    baths: listing?.baths || 1,
+    petPolicy: listing?.petPolicy || 'No pets',
     amenities: listing?.amenities || ['Attached Bathroom', 'In House Laundry'],
   })
 
@@ -1069,81 +1072,133 @@ function ListingEditorBoard({ mode, listing, profile, onMenuClick, onProfileClic
             </div>
 
             <button className="editor-action" type="button">
-              {isEdit ? 'Replace Images' : 'Upload Images'}
+              📷 {isEdit ? 'Replace Images' : 'Upload Images'}
             </button>
 
             <section className="editor-room-details">
               <h2>Room Details</h2>
 
-              <label>
-                Title
+              <div className="form-field">
+                <label>Title</label>
                 <input
                   type="text"
                   value={form.title}
                   onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
                 />
-              </label>
+              </div>
 
-              <label>
-                Owner
+              <div className="form-field">
+                <label>Owner</label>
                 <input
                   type="text"
                   value={form.owner}
                   onChange={(event) => setForm((prev) => ({ ...prev, owner: event.target.value }))}
                 />
-              </label>
+              </div>
 
-              <label>
-                Address
+              <div className="form-field">
+                <label>Address</label>
                 <input
                   type="text"
                   value={form.address}
                   onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
                 />
-              </label>
+              </div>
 
-              <label>
-                Monthly Price
+              <div className="form-field">
+                <label>Monthly Price</label>
                 <input
                   type="text"
                   value={form.price}
                   onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))}
                 />
-              </label>
+              </div>
 
-              <label>
-                Lease Details
+              <div className="form-field">
+                <label>Lease Details</label>
                 <input
                   type="text"
                   value={form.lease}
                   onChange={(event) => setForm((prev) => ({ ...prev, lease: event.target.value }))}
                 />
-              </label>
+              </div>
             </section>
           </div>
 
           <div className="editor-right">
-            <label className="editor-description">
-              Description
+            <div className="editor-description">
+              <label>Description</label>
               <textarea
                 value={form.description}
                 onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+                placeholder="Describe your listing in detail..."
               />
-            </label>
+            </div>
+
+            <div className="form-row">
+              <div className="form-field">
+                <label>Beds</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={form.beds}
+                  onChange={(event) => setForm((prev) => ({ ...prev, beds: Number(event.target.value) }))}
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Baths</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  step="0.5"
+                  value={form.baths}
+                  onChange={(event) => setForm((prev) => ({ ...prev, baths: Number(event.target.value) }))}
+                />
+              </div>
+            </div>
+
+            <div className="form-field">
+              <label>Pet Policy</label>
+              <select
+                value={form.petPolicy}
+                onChange={(event) => setForm((prev) => ({ ...prev, petPolicy: event.target.value }))}
+              >
+                <option value="No pets">No pets</option>
+                <option value="Pets allowed">Pets allowed</option>
+                <option value="Only cats allowed">Only cats allowed</option>
+              </select>
+            </div>
 
             <fieldset className="editor-amenities">
               <legend>Amenities</legend>
-              {['Attached Bathroom', 'In House Laundry', 'Fully Furnished', 'Dishwasher'].map((amenity) => (
-                <label key={amenity}>
-                  <input
-                    type="checkbox"
-                    checked={form.amenities.includes(amenity)}
-                    onChange={() => toggleAmenity(amenity)}
-                  />
-                  {' '}
-                  {amenity}
-                </label>
-              ))}
+              <div className="amenities-grid">
+                {[
+                  'Attached Bathroom',
+                  'In House Laundry', 
+                  'Fully Furnished',
+                  'Dishwasher',
+                  'Bike Storage',
+                  'Pet Friendly',
+                  'Heating Included',
+                  'Gym Access',
+                  'Quiet Hours',
+                  'Parking Spot',
+                  'Elevator',
+                  'Rooftop Access'
+                ].map((amenity) => (
+                  <label key={amenity}>
+                    <input
+                      type="checkbox"
+                      checked={form.amenities.includes(amenity)}
+                      onChange={() => toggleAmenity(amenity)}
+                    />
+                    {amenity}
+                  </label>
+                ))}
+              </div>
             </fieldset>
           </div>
         </div>
@@ -1619,10 +1674,23 @@ function App() {
       setIsBooting(true)
 
       try {
+        // Check if user was previously signed in
+        const savedSession = localStorage.getItem('userSession')
+        const savedProfile = localStorage.getItem('userProfile')
+        const wasSignedIn = savedSession ? JSON.parse(savedSession) : null
+        const savedProfileData = savedProfile ? JSON.parse(savedProfile) : null
+
         const snapshot = await backend.bootstrap()
         if (!alive) {
           return
         }
+
+        // If we had a saved session, restore it
+        if (wasSignedIn && wasSignedIn.signedIn && savedProfileData) {
+          snapshot.auth = wasSignedIn
+          snapshot.user = savedProfileData
+        }
+
         hydrateFromSnapshot(snapshot)
         setBoard(snapshot.auth.signedIn ? BOARD.BROWSE : BOARD.SIGN_IN)
       } catch {
@@ -1643,6 +1711,17 @@ function App() {
       alive = false
     }
   }, [])
+
+  // Save session and profile to localStorage whenever they change
+  useEffect(() => {
+    if (session.signedIn) {
+      localStorage.setItem('userSession', JSON.stringify(session))
+      localStorage.setItem('userProfile', JSON.stringify(profile))
+    } else {
+      localStorage.removeItem('userSession')
+      localStorage.removeItem('userProfile')
+    }
+  }, [session, profile])
 
   useEffect(() => {
     if (!notice) {
