@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { IMAGE_ICON_URL } from '../utils/constants'
 
@@ -16,6 +16,8 @@ export default function CreateListing({
   const navigate = useNavigate()
   const { id } = useParams() // For edit mode
   const isEdit = mode === 'edit' || Boolean(id)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const submitLockRef = useRef(false)
 
   const [form, setForm] = useState({
     title: listing?.title || '1 Bed, 1 Bath',
@@ -42,10 +44,20 @@ export default function CreateListing({
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (submitLockRef.current || isSubmitting || isLoading) {
+      return
+    }
+
+    submitLockRef.current = true
+    setIsSubmitting(true)
     const result = await onSubmit?.(form, isEdit ? listing?.id : undefined)
     if (result?.success) {
       navigate('/my-listings')
+      return
     }
+
+    submitLockRef.current = false
+    setIsSubmitting(false)
   }
 
   const availableAmenities = [
@@ -208,9 +220,9 @@ export default function CreateListing({
           <button 
             className="editor-submit" 
             type="submit" 
-            disabled={isLoading}
+            disabled={isLoading || isSubmitting}
           >
-            {isLoading 
+            {isLoading || isSubmitting
               ? (isEdit ? 'Updating...' : 'Creating...') 
               : (isEdit ? 'Update Post' : 'Upload Post')
             }

@@ -1,6 +1,8 @@
 const STORAGE_KEY = 'group12_hifi_backend_v7'
 const MIN_DELAY_MS = 280
 const MAX_DELAY_MS = 760
+const PROTOTYPE_EMAIL = 'prototype@yale.edu'
+const PROTOTYPE_PASSWORD = 'Prototype123!'
 
 const LISTING_SEED = [
   {
@@ -453,6 +455,18 @@ const SEED_DB = {
   pendingVerifications: [],
   users: [
     {
+      id: 'user-prototype',
+      firstName: 'Prototype',
+      lastName: 'User',
+      email: PROTOTYPE_EMAIL,
+      password: PROTOTYPE_PASSWORD,
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      role: 'Has a listing',
+      about: 'Persistent prototype account for demos.',
+      classYear: '2027',
+      universityId: 'uni-yale',
+    },
+    {
       id: 'user-1',
       firstName: 'Alicia',
       lastName: 'Stone',
@@ -536,23 +550,53 @@ function delay(ms = rand(MIN_DELAY_MS, MAX_DELAY_MS)) {
   })
 }
 
+function ensurePrototypeUser(db) {
+  const existing = db.users.find((user) => normalizeEmail(user.email) === PROTOTYPE_EMAIL)
+
+  if (!existing) {
+    db.users.push({
+      id: 'user-prototype',
+      firstName: 'Prototype',
+      lastName: 'User',
+      email: PROTOTYPE_EMAIL,
+      password: PROTOTYPE_PASSWORD,
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      role: 'Has a listing',
+      about: 'Persistent prototype account for demos.',
+      classYear: '2027',
+      universityId: 'uni-yale',
+    })
+    return
+  }
+
+  existing.password = PROTOTYPE_PASSWORD
+  existing.verifiedAt = existing.verifiedAt || '2026-01-01T00:00:00.000Z'
+}
+
 function readDb() {
   if (typeof window === 'undefined') {
-    return clone(SEED_DB)
+    const db = clone(SEED_DB)
+    ensurePrototypeUser(db)
+    return db
   }
 
   const raw = window.localStorage.getItem(STORAGE_KEY)
 
   if (!raw) {
     const seed = clone(SEED_DB)
+    ensurePrototypeUser(seed)
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seed))
     return seed
   }
 
   try {
-    return JSON.parse(raw)
+    const db = JSON.parse(raw)
+    ensurePrototypeUser(db)
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db))
+    return db
   } catch {
     const seed = clone(SEED_DB)
+    ensurePrototypeUser(seed)
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seed))
     return seed
   }
@@ -627,11 +671,7 @@ function sanitizeListingInput(input, fallbackListing = null) {
   const sqFt = Number(input.sqFt ?? fallbackListing?.sqFt ?? 850)
   const lat = Number(input.lat ?? fallbackListing?.lat ?? 41.3083)
   const lng = Number(input.lng ?? fallbackListing?.lng ?? -72.9279)
-  const imageUrl = (
-    input.imageUrl
-    || fallbackListing?.imageUrl
-    || 'https://images.unsplash.com/photo-1493666438817-866a91353ca9?auto=format&fit=crop&w=1600&q=80'
-  ).trim()
+  const imageUrl = String(input.imageUrl ?? fallbackListing?.imageUrl ?? '').trim()
 
   return {
     title,
@@ -669,6 +709,19 @@ function ensureThreadAndMessages(db, listing) {
       },
     ]
   }
+}
+
+function isSameListingPayload(a, b) {
+  return (
+    String(a?.title || '').trim().toLowerCase() === String(b?.title || '').trim().toLowerCase()
+    && String(a?.owner || '').trim().toLowerCase() === String(b?.owner || '').trim().toLowerCase()
+    && String(a?.address || '').trim().toLowerCase() === String(b?.address || '').trim().toLowerCase()
+    && String(a?.price || '').trim().toLowerCase() === String(b?.price || '').trim().toLowerCase()
+    && String(a?.lease || '').trim().toLowerCase() === String(b?.lease || '').trim().toLowerCase()
+    && String(a?.description || '').trim().toLowerCase() === String(b?.description || '').trim().toLowerCase()
+    && Number(a?.beds || 0) === Number(b?.beds || 0)
+    && Number(a?.baths || 0) === Number(b?.baths || 0)
+  )
 }
 
 function snapshotFromDb(db) {
@@ -872,9 +925,10 @@ export const backend = {
     return snapshotFromDb(db)
   },
 
-  async upsertListing({ mode, listingId, payload }) {
+  async upsertListing({ mode, listingId, payload, actorUserId = null }) {
     await delay()
     const db = readDb()
+    const effectiveUserId = actorUserId || db.auth?.userId || null
 
     if (mode === 'edit') {
       const index = db.listings.findIndex((listing) => listing.id === listingId)
@@ -884,9 +938,16 @@ export const backend = {
       }
 
       const current = db.listings[index]
+      const editorUserId = effectiveUserId
+
+      if (current.ownerUserId && editorUserId && current.ownerUserId !== editorUserId) {
+        throw new Error('You can only edit your own listings.')
+      }
+
       const next = {
         ...current,
         ...sanitizeListingInput(payload, current),
+        ownerUserId: current.ownerUserId || editorUserId,
       }
 
       db.listings[index] = next
@@ -910,7 +971,21 @@ export const backend = {
       id: listingIdValue,
       threadId: threadIdValue,
       ...sanitized,
+      ownerUserId: effectiveUserId,
       createdAt: new Date().toISOString(),
+    }
+
+    const duplicate = db.listings.find((listing) => {
+      if ((listing.ownerUserId || null) !== newListing.ownerUserId) {
+        return false
+      }
+
+      const ageMs = Math.abs(new Date(newListing.createdAt).getTime() - new Date(listing.createdAt || 0).getTime())
+      return ageMs <= 10000 && isSameListingPayload(listing, newListing)
+    })
+
+    if (duplicate) {
+      return snapshotFromDb(db)
     }
 
     db.listings.unshift(newListing)

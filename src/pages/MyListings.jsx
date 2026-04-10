@@ -11,7 +11,6 @@ import {
   Shirt,
   Wallet,
 } from 'lucide-react'
-import { IMAGE_ICON_URL } from '../utils/constants'
 import { 
   numericPrice, 
   distanceMiles, 
@@ -21,20 +20,69 @@ import {
 
 export default function MyListings({ 
   listings, 
+  currentUserId,
+  currentProfile,
   onEditListing, 
   onOpenListing 
 }) {
   const navigate = useNavigate()
+  const profileFullName = `${currentProfile?.firstName || ''} ${currentProfile?.lastName || ''}`.trim().toLowerCase()
+  const profileEmail = (currentProfile?.email || '').trim().toLowerCase()
+
+  const ownedListings = useMemo(() => {
+    return listings.filter((listing) => {
+      if (currentUserId && listing.ownerUserId) {
+        return listing.ownerUserId === currentUserId
+      }
+
+      const listingOwner = String(listing.owner || '').trim().toLowerCase()
+      const matchesName = profileFullName.length > 0 && listingOwner === profileFullName
+      const matchesEmail = profileEmail.length > 0 && listingOwner === profileEmail
+      return matchesName || matchesEmail
+    })
+  }, [listings, currentUserId, profileFullName, profileEmail])
+
+  const uniqueOwnedListings = useMemo(() => {
+    const bySignature = new Map()
+
+    ownedListings.forEach((listing) => {
+      const signature = [
+        String(listing.ownerUserId || '').trim().toLowerCase(),
+        String(listing.owner || '').trim().toLowerCase(),
+        String(listing.title || '').trim().toLowerCase(),
+        String(listing.address || '').trim().toLowerCase(),
+        String(listing.price || '').trim().toLowerCase(),
+        String(listing.lease || '').trim().toLowerCase(),
+        String(listing.description || '').trim().toLowerCase(),
+        String(listing.beds ?? ''),
+        String(listing.baths ?? ''),
+      ].join('|')
+
+      const existing = bySignature.get(signature)
+      if (!existing) {
+        bySignature.set(signature, listing)
+        return
+      }
+
+      const listingTime = new Date(listing.createdAt || 0).getTime()
+      const existingTime = new Date(existing.createdAt || 0).getTime()
+      if (listingTime > existingTime) {
+        bySignature.set(signature, listing)
+      }
+    })
+
+    return Array.from(bySignature.values())
+  }, [ownedListings])
   
   const maxPriceBound = useMemo(() => {
-    const prices = listings.map((listing) => numericPrice(listing.price)).filter((price) => price > 0)
+    const prices = uniqueOwnedListings.map((listing) => numericPrice(listing.price)).filter((price) => price > 0)
     return prices.length > 0 ? Math.max(...prices) : 3000
-  }, [listings])
+  }, [uniqueOwnedListings])
 
   const maxDistanceBound = useMemo(() => {
-    const distances = listings.map((listing) => distanceMiles(listing.distance)).filter((distance) => distance > 0)
+    const distances = uniqueOwnedListings.map((listing) => distanceMiles(listing.distance)).filter((distance) => distance > 0)
     return distances.length > 0 ? Math.max(...distances) : 3
-  }, [listings])
+  }, [uniqueOwnedListings])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [minBeds, setMinBeds] = useState(0)
@@ -57,7 +105,7 @@ export default function MyListings({
   const filteredListings = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
 
-    return listings.filter((listing) => {
+    return uniqueOwnedListings.filter((listing) => {
       const textMatch =
         query.length === 0
         || listing.title.toLowerCase().includes(query)
@@ -83,7 +131,7 @@ export default function MyListings({
       return textMatch && bedsMatch && bathsMatch && priceMatch && distanceMatch && petMatch && laundryMatch && heatingMatch && bikeMatch
     })
   }, [
-    listings,
+    uniqueOwnedListings,
     searchQuery,
     minBeds,
     minBaths,
@@ -236,9 +284,9 @@ export default function MyListings({
           <div className="my-listings-grid">
             {filteredListings.length === 0 ? (
               <article className="my-listing-card my-listing-card--empty">
-                <h2>{listings.length === 0 ? 'No listings yet' : 'No listings match these filters'}</h2>
+                <h2>{uniqueOwnedListings.length === 0 ? 'No listings yet' : 'No listings match these filters'}</h2>
                 <p>
-                  {listings.length === 0
+                  {uniqueOwnedListings.length === 0
                     ? 'Create your first listing from the Create Listing tab.'
                     : 'Try broadening your filters to see more listings.'}
                 </p>
@@ -247,7 +295,11 @@ export default function MyListings({
               filteredListings.map((listing) => (
                 <article key={listing.id} className="my-listing-card">
                   <div className="my-listing-card__image">
-                    <img className="image-placeholder" src={listing.imageUrl || IMAGE_ICON_URL} alt={listing.title} />
+                    {listing.imageUrl ? (
+                      <img className="image-placeholder" src={listing.imageUrl} alt={listing.title} />
+                    ) : (
+                      <div className="image-placeholder" aria-hidden="true" />
+                    )}
                   </div>
 
                   <h2>{listing.title}</h2>

@@ -219,6 +219,7 @@ function AppContent() {
         mode,
         listingId: editId,
         payload,
+        actorUserId: user?.userId || null,
       }),
       mode === 'edit' ? 'Listing updated.' : 'Listing published.',
     )
@@ -317,6 +318,8 @@ function AppContent() {
             <ProtectedRoute user={user}>
               <MyListings 
                 listings={listings}
+                currentUserId={user?.userId || null}
+                currentProfile={profile}
               />
             </ProtectedRoute>
           } 

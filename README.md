@@ -61,7 +61,7 @@ https://github.com/arushsrivastava-git/CPSC4840-Group12
 ## Collaboration record
 - **Arush Srivastava - as4833**: Ported original wireframe from Figma, worked on full UI rehaul to make the wireframe
 look like a professional, built out the basic userflows for tasks without the simulated backend
-- **Anushka Hebbar**:
+- **Anushka Hebbar**: Worked on the user account creation, sign in, profile page, house listing browsing, search filtering, map integration for house listings, post creation, and user listing workflows. Worked on UI rehaul to make the wireframe look high-fidelity.
 - **Tristan Ghosh - tg595**:Improved several aspects of the UX by fixing certain map/scrolling issues and 
 edited my listing and browse listing pages to match
 the heuristics better.

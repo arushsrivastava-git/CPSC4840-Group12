@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { CREATE_INTENTS } from '../utils/constants'
 
+const PROTOTYPE_EMAIL = 'prototype@yale.edu'
+const PROTOTYPE_PASSWORD = 'Prototype123!'
+
 export default function Auth({ 
   onSignIn, 
   onCreateAccount, 
@@ -206,6 +209,20 @@ export default function Auth({
           ) : (
             <form className="auth-form auth-form--sign-in" onSubmit={handleSubmit}>
               <h2>Sign In</h2>
+
+              <div className="auth-prototype-popup" role="note" aria-label="Prototype credentials">
+                <p className="auth-prototype-popup__title">Prototype Sign-In</p>
+                <p className="auth-prototype-popup__copy">Use these demo credentials for the prototype environment.</p>
+                <p><strong>Email:</strong> {PROTOTYPE_EMAIL}</p>
+                <p><strong>Password:</strong> {PROTOTYPE_PASSWORD}</p>
+                <button
+                  type="button"
+                  className="auth-prototype-popup__fill"
+                  onClick={() => setSignInForm({ email: PROTOTYPE_EMAIL, password: PROTOTYPE_PASSWORD })}
+                >
+                  Use Prototype Credentials
+                </button>
+              </div>
 
               <label>
                 Email Address
