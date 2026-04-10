@@ -1181,13 +1181,7 @@ function ListingEditorBoard({ mode, listing, profile, onMenuClick, onProfileClic
                   'Fully Furnished',
                   'Dishwasher',
                   'Bike Storage',
-                  'Pet Friendly',
-                  'Heating Included',
-                  'Gym Access',
-                  'Quiet Hours',
-                  'Parking Spot',
-                  'Elevator',
-                  'Rooftop Access'
+                  'Heating Included'
                 ].map((amenity) => (
                   <label key={amenity}>
                     <input
