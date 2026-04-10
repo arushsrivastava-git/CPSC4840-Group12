@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bath,
   BedDouble,
@@ -1157,6 +1157,75 @@ function ListingEditorBoard({ mode, listing, profile, onMenuClick, onProfileClic
 }
 
 function MyListingsBoard({ listings, onMenuClick, onProfileClick, onEditListing, onOpenListing }) {
+  const maxPriceBound = useMemo(() => {
+    const prices = listings.map((listing) => numericPrice(listing.price)).filter((price) => price > 0)
+    return prices.length > 0 ? Math.max(...prices) : 3000
+  }, [listings])
+
+  const maxDistanceBound = useMemo(() => {
+    const distances = listings.map((listing) => distanceMiles(listing.distance)).filter((distance) => distance > 0)
+    return distances.length > 0 ? Math.max(...distances) : 3
+  }, [listings])
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [minBeds, setMinBeds] = useState(0)
+  const [minBaths, setMinBaths] = useState(0)
+  const [maxPrice, setMaxPrice] = useState(maxPriceBound)
+  const [maxDistance, setMaxDistance] = useState(maxDistanceBound)
+  const [petPolicy, setPetPolicy] = useState('any')
+  const [requireLaundry, setRequireLaundry] = useState(false)
+  const [requireHeating, setRequireHeating] = useState(false)
+  const [requireBikeStorage, setRequireBikeStorage] = useState(false)
+
+  useEffect(() => {
+    setMaxPrice((current) => (current > maxPriceBound ? maxPriceBound : current || maxPriceBound))
+  }, [maxPriceBound])
+
+  useEffect(() => {
+    setMaxDistance((current) => (current > maxDistanceBound ? maxDistanceBound : current || maxDistanceBound))
+  }, [maxDistanceBound])
+
+  const filteredListings = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+
+    return listings.filter((listing) => {
+      const textMatch =
+        query.length === 0
+        || listing.title.toLowerCase().includes(query)
+        || listing.owner.toLowerCase().includes(query)
+        || listing.address.toLowerCase().includes(query)
+
+      const bedsMatch = Number(listing.beds || 0) >= minBeds
+      const bathsMatch = Number(listing.baths || 0) >= minBaths
+      const priceMatch = numericPrice(listing.price) <= maxPrice
+      const distanceMatch = distanceMiles(listing.distance) <= maxDistance
+
+      const listingPetPolicy = resolvedPetPolicy(listing)
+      const petMatch =
+        petPolicy === 'any'
+        || (petPolicy === 'pets' && listingPetPolicy === 'Pets allowed')
+        || (petPolicy === 'cats' && listingPetPolicy === 'Only cats allowed')
+        || (petPolicy === 'none' && listingPetPolicy === 'No pets')
+
+      const laundryMatch = !requireLaundry || hasInUnitLaundry(listing)
+      const heatingMatch = !requireHeating || listing.amenities?.includes('Heating Included')
+      const bikeMatch = !requireBikeStorage || listing.amenities?.includes('Bike Storage')
+
+      return textMatch && bedsMatch && bathsMatch && priceMatch && distanceMatch && petMatch && laundryMatch && heatingMatch && bikeMatch
+    })
+  }, [
+    listings,
+    searchQuery,
+    minBeds,
+    minBaths,
+    maxPrice,
+    maxDistance,
+    petPolicy,
+    requireLaundry,
+    requireHeating,
+    requireBikeStorage,
+  ])
+
   return (
     <div className="board board--my-listings">
       <WireframeHeader activeMenu="My Listings" onMenuClick={onMenuClick} onProfileClick={onProfileClick} />
@@ -1164,15 +1233,143 @@ function MyListingsBoard({ listings, onMenuClick, onProfileClick, onEditListing,
       <section className="my-listings-body">
         <h1>My Listings</h1>
 
+        <div className="results-controls" role="search">
+          <div className="search-row">
+            <Search size={16} aria-hidden="true" />
+            <input
+              id="my-listings-search-input"
+              className="search-row__input"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search by title, owner, or address"
+              aria-label="Search my listings"
+            />
+            <button type="button" className="search-row__action" onClick={() => setSearchQuery(searchQuery.trim())}>
+              Search
+            </button>
+          </div>
+
+          <div className="icon-filters">
+            <label className="icon-filter" htmlFor="my-min-beds-filter">
+              <BedDouble size={14} aria-hidden="true" />
+              Beds
+              <select
+                id="my-min-beds-filter"
+                value={minBeds}
+                onChange={(event) => setMinBeds(Number(event.target.value))}
+              >
+                <option value={0}>Any</option>
+                <option value={1}>1+</option>
+                <option value={2}>2+</option>
+                <option value={3}>3+</option>
+              </select>
+            </label>
+
+            <label className="icon-filter" htmlFor="my-min-baths-filter">
+              <Bath size={14} aria-hidden="true" />
+              Baths
+              <select
+                id="my-min-baths-filter"
+                value={minBaths}
+                onChange={(event) => setMinBaths(Number(event.target.value))}
+              >
+                <option value={0}>Any</option>
+                <option value={1}>1+</option>
+                <option value={2}>2+</option>
+              </select>
+            </label>
+
+            <label className="icon-filter icon-filter--slider" htmlFor="my-max-price-filter">
+              <Wallet size={14} aria-hidden="true" />
+              Max Price ${maxPrice.toLocaleString()}
+              <input
+                id="my-max-price-filter"
+                type="range"
+                min={0}
+                max={maxPriceBound}
+                step={50}
+                value={maxPrice}
+                onChange={(event) => setMaxPrice(Number(event.target.value))}
+              />
+            </label>
+
+            <label className="icon-filter icon-filter--slider" htmlFor="my-max-distance-filter">
+              <MapPin size={14} aria-hidden="true" />
+              Distance ≤ {maxDistance.toFixed(1)} mi
+              <input
+                id="my-max-distance-filter"
+                type="range"
+                min={0.1}
+                max={maxDistanceBound}
+                step={0.1}
+                value={maxDistance}
+                onChange={(event) => setMaxDistance(Number(event.target.value))}
+              />
+            </label>
+
+            <label className="icon-filter" htmlFor="my-pet-policy-filter">
+              <PawPrint size={14} aria-hidden="true" />
+              Pets
+              <select
+                id="my-pet-policy-filter"
+                value={petPolicy}
+                onChange={(event) => setPetPolicy(event.target.value)}
+              >
+                <option value="any">Any</option>
+                <option value="pets">Pets allowed</option>
+                <option value="cats">Only cats allowed</option>
+                <option value="none">No pets</option>
+              </select>
+            </label>
+
+            <label className="icon-filter icon-filter--check" htmlFor="my-in-unit-laundry-filter">
+              <Shirt size={14} aria-hidden="true" />
+              In-unit Laundry
+              <input
+                id="my-in-unit-laundry-filter"
+                type="checkbox"
+                checked={requireLaundry}
+                onChange={(event) => setRequireLaundry(event.target.checked)}
+              />
+            </label>
+
+            <label className="icon-filter icon-filter--check" htmlFor="my-heating-filter">
+              <Flame size={14} aria-hidden="true" />
+              Heating Included
+              <input
+                id="my-heating-filter"
+                type="checkbox"
+                checked={requireHeating}
+                onChange={(event) => setRequireHeating(event.target.checked)}
+              />
+            </label>
+
+            <label className="icon-filter icon-filter--check" htmlFor="my-bike-storage-filter">
+              <Bike size={14} aria-hidden="true" />
+              Bike Storage
+              <input
+                id="my-bike-storage-filter"
+                type="checkbox"
+                checked={requireBikeStorage}
+                onChange={(event) => setRequireBikeStorage(event.target.checked)}
+              />
+            </label>
+          </div>
+        </div>
+
         <div className="my-listings-layout">
           <div className="my-listings-grid">
-            {listings.length === 0 ? (
+            {filteredListings.length === 0 ? (
               <article className="my-listing-card my-listing-card--empty">
-                <h2>No listings yet</h2>
-                <p>Create your first listing from the Create Listing tab.</p>
+                <h2>{listings.length === 0 ? 'No listings yet' : 'No listings match these filters'}</h2>
+                <p>
+                  {listings.length === 0
+                    ? 'Create your first listing from the Create Listing tab.'
+                    : 'Try broadening your filters to see more listings.'}
+                </p>
               </article>
             ) : (
-              listings.map((listing) => (
+              filteredListings.map((listing) => (
                 <article key={listing.id} className="my-listing-card">
                   <div className="my-listing-card__image">
                     <ImagePlaceholder alt="Listing" />
@@ -1194,23 +1391,6 @@ function MyListingsBoard({ listings, onMenuClick, onProfileClick, onEditListing,
               ))
             )}
           </div>
-
-          <aside className="my-listings-filter">
-            <h2>Filters</h2>
-            <label>
-              Price range
-              <input type="text" defaultValue="$700 - $1800" />
-            </label>
-            <label>
-              Bedrooms
-              <input type="text" defaultValue="1 - 3" />
-            </label>
-            <label>
-              Distance
-              <input type="text" defaultValue="Within 1.5 mi" />
-            </label>
-            <button type="button">Apply</button>
-          </aside>
         </div>
       </section>
     </div>
@@ -1228,6 +1408,47 @@ function MessagesBoard({
   onMenuClick,
   onProfileClick,
 }) {
+  const messageListRef = useRef(null)
+  const activeThreadId = activeThread?.id || null
+  const previousThreadIdRef = useRef(null)
+  const previousMessageCountRef = useRef(0)
+  const shouldAutoScrollRef = useRef(true)
+
+  const scrollMessagesToBottom = () => {
+    const node = messageListRef.current
+    if (!node) {
+      return
+    }
+    node.scrollTop = node.scrollHeight
+  }
+
+  const updateAutoScrollPreference = () => {
+    const node = messageListRef.current
+    if (!node) {
+      return
+    }
+
+    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight
+    shouldAutoScrollRef.current = distanceFromBottom <= 24
+  }
+
+  useEffect(() => {
+    if (previousThreadIdRef.current !== activeThreadId) {
+      previousThreadIdRef.current = activeThreadId
+      previousMessageCountRef.current = messages.length
+      shouldAutoScrollRef.current = true
+      requestAnimationFrame(scrollMessagesToBottom)
+      return
+    }
+
+    const hadNewMessages = messages.length > previousMessageCountRef.current
+    previousMessageCountRef.current = messages.length
+
+    if (hadNewMessages && shouldAutoScrollRef.current) {
+      requestAnimationFrame(scrollMessagesToBottom)
+    }
+  }, [activeThreadId, messages])
+
   return (
     <div className="board board--messages">
       <WireframeHeader activeMenu="Messages" onMenuClick={onMenuClick} onProfileClick={onProfileClick} />
@@ -1266,7 +1487,11 @@ function MessagesBoard({
               </div>
             </header>
 
-            <div className="conversation-panel__messages">
+            <div
+              ref={messageListRef}
+              className="conversation-panel__messages"
+              onScroll={updateAutoScrollPreference}
+            >
               {messages.length === 0 ? (
                 <p className="chat-bubble chat-bubble--them">No messages yet.</p>
               ) : (
