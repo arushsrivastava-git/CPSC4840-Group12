@@ -90,7 +90,7 @@ button:focus-visible {
   background: var(--bg-board);
   border: 0;
   border-radius: 0;
-  overflow: hidden;
+  overflow: clip;
   box-shadow: none;
   animation: board-enter 420ms ease;
 }
@@ -399,9 +399,11 @@ button:focus-visible {
 }
 
 .results-map-rail {
-  position: relative;
+  position: sticky;
+  top: 60px;
   align-self: start;
   display: flex;
+  height: calc(100vh - 60px);
 }
 
 .results-map-rail .map-panel {
@@ -1631,10 +1633,16 @@ button:focus-visible {
 .my-listing-card__image {
   border-radius: var(--radius-sm);
   border: 1px solid #e3dfd3;
-  background: var(--surface-soft);
-  display: grid;
-  place-items: center;
-  min-height: 130px;
+  overflow: hidden;
+  height: 180px;
+}
+
+.my-listing-card__image .image-placeholder {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 1;
+  filter: none;
 }
 
 .my-listing-card h2 {

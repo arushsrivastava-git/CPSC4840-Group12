@@ -247,7 +247,7 @@ export default function MyListings({
               filteredListings.map((listing) => (
                 <article key={listing.id} className="my-listing-card">
                   <div className="my-listing-card__image">
-                    <img className="image-placeholder" src={IMAGE_ICON_URL} alt="Listing" />
+                    <img className="image-placeholder" src={listing.imageUrl || IMAGE_ICON_URL} alt={listing.title} />
                   </div>
 
                   <h2>{listing.title}</h2>
