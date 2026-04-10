@@ -39,8 +39,10 @@ The app supports the following board states:
 
 ## Tech Stack
 
-- **React 19**
-- **Vite 8**
+- **Node.js 24.12.0 (LTS)**
+- **npm 11.7.0**
+- **React 19.2.4**
+- **Vite 8.0.0**
 - **Plain CSS** (no Tailwind)
 - **ESLint 9**
 
@@ -61,8 +63,8 @@ The app supports the following board states:
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ (Node 20+ recommended)
-- npm
+- Node.js **24.12.0**
+- npm **11.7.0**
 
 ### Install
 

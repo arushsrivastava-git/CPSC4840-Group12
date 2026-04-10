@@ -34,5 +34,13 @@ coverage/
 
 # Build caches
 .cache/
+.eslintcache
+*.tsbuildinfo
+.npm/
+.pnpm-store/
 
 .agents/
+
+# Local environment tooling
+.direnv/
+.envrc
